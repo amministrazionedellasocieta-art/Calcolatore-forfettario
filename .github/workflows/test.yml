@@ -1,9 +1,16 @@
 name: Test
 
+# I push sui branch di lavoro sono gia' coperti dall'evento pull_request:
+# elencarli anche qui faceva girare ogni job due volte.
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
   pull_request:
+
+# Un nuovo push annulla la verifica ancora in corso sullo stesso riferimento.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   motore:
