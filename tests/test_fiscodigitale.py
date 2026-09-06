@@ -211,6 +211,52 @@ class TestOrdinario(unittest.TestCase):
         self.assertEqual(ordinario.aliquota_marginale(30_000), 0.33)
         self.assertEqual(ordinario.aliquota_marginale(80_000), 0.43)
 
+    def test_detrazione_scaglione_pieno(self):
+        self.assertEqual(ordinario.detrazione_lavoro_autonomo(3_000), 1_265.0)
+        self.assertEqual(ordinario.detrazione_lavoro_autonomo(5_500), 1_265.0)
+
+    def test_detrazione_continua_nei_raccordi(self):
+        # La funzione non deve avere salti nei due punti di raccordo.
+        self.assertAlmostEqual(
+            ordinario.detrazione_lavoro_autonomo(5_500.01), 1_265.0, delta=0.01
+        )
+        self.assertAlmostEqual(
+            ordinario.detrazione_lavoro_autonomo(28_000), 500.0, places=2
+        )
+        self.assertAlmostEqual(
+            ordinario.detrazione_lavoro_autonomo(28_000.01), 500.0, delta=0.01
+        )
+
+    def test_detrazione_si_azzera_a_50000(self):
+        self.assertEqual(ordinario.detrazione_lavoro_autonomo(50_000), 0.0)
+        self.assertEqual(ordinario.detrazione_lavoro_autonomo(90_000), 0.0)
+
+    def test_detrazione_decrescente(self):
+        valori = [ordinario.detrazione_lavoro_autonomo(r) for r in range(0, 60_000, 2_000)]
+        self.assertEqual(valori, sorted(valori, reverse=True))
+
+    def test_detrazione_applicata_riduce_irpef(self):
+        e = ordinario.calcola(ordinario.SituazioneOrdinario(ricavi=40_000))
+        self.assertGreater(e.detrazione, 0)
+        self.assertAlmostEqual(e.irpef, e.irpef_lorda - e.detrazione, places=2)
+
+    def test_detrazione_non_genera_credito(self):
+        e = ordinario.calcola(ordinario.SituazioneOrdinario(ricavi=6_000))
+        self.assertGreaterEqual(e.irpef, 0.0)
+        self.assertLessEqual(e.detrazione, e.irpef_lorda)
+
+    def test_addizionali_non_dovute_se_irpef_azzerata(self):
+        e = ordinario.calcola(ordinario.SituazioneOrdinario(ricavi=6_000))
+        self.assertEqual(e.irpef, 0.0)
+        self.assertEqual(e.addizionali, 0.0)
+
+    def test_detrazione_parametrata_al_reddito_complessivo(self):
+        # Non all'imponibile al netto dei contributi: due redditi complessivi
+        # uguali danno la stessa detrazione a parita' di gestione.
+        a = ordinario.calcola(ordinario.SituazioneOrdinario(ricavi=40_000, costi=0))
+        b = ordinario.calcola(ordinario.SituazioneOrdinario(ricavi=50_000, costi=10_000))
+        self.assertEqual(a.detrazione, b.detrazione)
+
     def test_contributi_deducibili(self):
         e = ordinario.calcola(ordinario.SituazioneOrdinario(ricavi=50_000, costi=10_000))
         self.assertAlmostEqual(e.reddito, 40_000, places=2)
@@ -245,6 +291,12 @@ class TestConfronto(unittest.TestCase):
         sopra = confronto.confronta(s, costi=pareggio + 5_000)
         self.assertEqual(sotto.conviene, "forfettario")
         self.assertEqual(sopra.conviene, "ordinario")
+
+    def test_detrazione_abbassa_il_pareggio(self):
+        # Applicare la detrazione rende l'ordinario meno caro, quindi il
+        # pareggio arriva prima: e' la correzione al confronto tra regimi.
+        pareggio = confronto.costi_di_pareggio(self.base())
+        self.assertLess(pareggio, 17_648)
 
     def test_coefficiente_basso_alza_il_pareggio(self):
         alto = confronto.costi_di_pareggio(self.base(coefficiente=0.78))
@@ -442,6 +494,55 @@ class TestDiagnosi(unittest.TestCase):
             )
         )
         self.assertFalse(d.ammesso_al_forfettario)
+
+    def test_inquadramento_incerto_viene_segnalato(self):
+        d = diagnosi.analizza(diagnosi.Profilo(professione="streamer", ricavi_attesi=45_000))
+        self.assertTrue(d.inquadramento_da_scegliere)
+        self.assertEqual(d.gestione, previdenza.GESTIONE_SEPARATA)
+        self.assertTrue(any(v.nome == "Inquadramento da confermare" for v in d.verifiche))
+
+    def test_inquadramento_non_dipende_dal_fatturato(self):
+        # Regressione: prima una soglia arbitraria di 30.000 euro decideva la
+        # cassa previdenziale al posto dell'utente.
+        bassi = diagnosi.analizza(diagnosi.Profilo(professione="streamer", ricavi_attesi=12_000))
+        alti = diagnosi.analizza(diagnosi.Profilo(professione="streamer", ricavi_attesi=80_000))
+        self.assertEqual(bassi.gestione, alti.gestione)
+
+    def test_natura_esplicita_risolve_la_scelta(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="streamer", ricavi_attesi=45_000, natura_attivita=diagnosi.IMPRESA
+        ))
+        self.assertFalse(d.inquadramento_da_scegliere)
+        self.assertEqual(d.gestione, previdenza.COMMERCIANTI)
+        self.assertFalse(any(v.nome == "Inquadramento da confermare" for v in d.verifiche))
+
+    def test_natura_professionale_esplicita(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="streamer", ricavi_attesi=45_000,
+            natura_attivita=diagnosi.PROFESSIONALE,
+        ))
+        self.assertFalse(d.inquadramento_da_scegliere)
+        self.assertEqual(d.gestione, previdenza.GESTIONE_SEPARATA)
+
+    def test_natura_non_valida_rifiutata(self):
+        with self.assertRaises(ValueError):
+            diagnosi.Profilo(professione="streamer", ricavi_attesi=1_000, natura_attivita="altro")
+
+    def test_costo_inquadramento_confronta_le_due_forme(self):
+        d = diagnosi.analizza(diagnosi.Profilo(professione="streamer", ricavi_attesi=12_000))
+        costo = d.costo_inquadramento
+        self.assertIsNotNone(costo)
+        self.assertAlmostEqual(
+            costo["differenza"], costo["impresa"] - costo["professionale"], places=2
+        )
+        # A redditi bassi la quota fissa d'impresa pesa piu' della percentuale.
+        self.assertGreater(costo["impresa"], costo["professionale"])
+
+    def test_professioni_certe_non_chiedono_la_scelta(self):
+        for slug in ("sviluppatore-software", "ecommerce"):
+            d = diagnosi.analizza(diagnosi.Profilo(professione=slug, ricavi_attesi=45_000))
+            self.assertFalse(d.inquadramento_da_scegliere, slug)
+            self.assertIsNone(d.costo_inquadramento, slug)
 
     def test_ecommerce_va_in_gestione_commercianti(self):
         d = diagnosi.analizza(diagnosi.Profilo(professione="ecommerce", ricavi_attesi=60_000))

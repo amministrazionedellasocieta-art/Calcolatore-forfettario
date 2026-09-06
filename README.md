@@ -35,8 +35,17 @@ l'anno.
 
 **Il confronto onesto con l'ordinario** — con il calcolo del punto di pareggio:
 oltre quanti costi reali il forfettario inizia a farti perdere soldi. Per un
-professionista al 78% il pareggio è intorno al 35% dei ricavi, per un
-e-commerce al 40% supera l'80%.
+professionista al 78% il pareggio è intorno al 34% dei ricavi, per uno
+sviluppatore al 67% al 42%, per un e-commerce al 40% al 74%. Il regime
+ordinario è calcolato con la detrazione per redditi di lavoro autonomo
+(art. 13 c. 5 TUIR): ignorarla sposterebbe il pareggio di circa due punti e
+sempre nella stessa direzione.
+
+**L'inquadramento non lo indovina** — per i lavori che possono essere
+professionali o d'impresa (streamer, videomaker, affiliate marketer, coach) la
+cassa previdenziale non si deduce dal fatturato: dipende da come è organizzata
+l'attività. Lo strumento lo dichiara come scelta aperta, mostra quanto costa
+l'una e l'altra forma e chiede all'utente di indicarlo.
 
 **Contabilità di cassa con presidio delle soglie** — 85.000 e 100.000 euro,
 10.000 euro di vendite a privati UE, 10.000 euro di acquisti di beni UE, 20.000
@@ -97,7 +106,7 @@ testabili in isolamento.
 | `diagnosi.py` | Orchestrazione: dal lavoro alla checklist completa |
 
 ```bash
-python3 -m unittest discover -s tests -v   # 69 test
+python3 -m unittest discover -s tests -v   # 85 test
 ```
 
 ## Dati e fonti
@@ -129,8 +138,9 @@ In particolare:
 - l'inquadramento di molti lavori digitali dipende da **come** l'attività è
   organizzata in concreto (professionale o d'impresa), e il codice ATECO va
   confermato caso per caso;
-- il calcolo in regime ordinario è semplificato: non considera detrazioni
-  personali, familiari a carico e oneri detraibili, che riducono il dovuto;
+- il calcolo in regime ordinario applica la detrazione per redditi di lavoro
+  autonomo, ma non le detrazioni personali, i familiari a carico e gli oneri
+  detraibili, che riducono ulteriormente il dovuto;
 - le addizionali regionali e comunali usano valori medi, non quelli del tuo
   Comune;
 - l'entità che paga una piattaforma può cambiare nel tempo: va sempre verificata
@@ -141,4 +151,8 @@ In particolare:
 - coefficienti aggiornati quando uscirà la tabella riscritta su ATECO 2025;
 - casse professionali con i regolamenti reali al posto dei parametri indicativi;
 - import dei movimenti da CSV di banca e piattaforme;
-- calcolo delle plusvalenze su cripto-attività con il metodo LIFO.
+- calcolo delle plusvalenze su cripto-attività con il metodo LIFO;
+- attività multiple: chi incassa da sponsorizzazioni (78%) e da AdSense (67%)
+  oggi deve sceglierne una sola;
+- rimozione o implementazione dei parametri dichiarati e non ancora usati
+  (casse professionali, diritti d'autore, ritenuta d'acconto, IRAP).

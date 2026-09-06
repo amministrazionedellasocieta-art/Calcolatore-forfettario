@@ -19,6 +19,10 @@ OK = "ok"
 ATTENZIONE = "attenzione"
 BLOCCANTE = "bloccante"
 
+# Natura dell'attivita': non dipende dal fatturato ma da come si lavora.
+PROFESSIONALE = "professionale"
+IMPRESA = "impresa"
+
 
 @dataclass(frozen=True)
 class Verifica:
@@ -47,6 +51,13 @@ class Profilo:
     prima_attivita: bool = True
     mesi_attivita: int = 12
     gestione_scelta: str | None = None
+    natura_attivita: str | None = None
+    """Come eserciti: "professionale" o "impresa".
+
+    Per molti lavori digitali il mestiere da solo non lo determina. Lasciarlo a
+    None non e' un errore: la diagnosi lo segnala come scelta da compiere
+    invece di indovinarla.
+    """
     # Cause di esclusione e requisiti
     redditi_dipendente_anno_precedente: float = 0.0
     partecipazioni_societarie: bool = False
@@ -65,6 +76,10 @@ class Profilo:
     def __post_init__(self) -> None:
         if self.ricavi_attesi < 0:
             raise ValueError("i ricavi attesi non possono essere negativi")
+        if self.natura_attivita not in (None, PROFESSIONALE, IMPRESA):
+            raise ValueError(
+                f"natura_attivita non valida: {self.natura_attivita!r}"
+            )
 
 
 @dataclass(frozen=True)
@@ -80,6 +95,8 @@ class Diagnosi:
     operazioni_iva: tuple[tuple[str, iva_estero.EsitoIva], ...]
     prossime_scadenze: tuple[scadenze.Scadenza, ...]
     avvisi: tuple[str, ...]
+    inquadramento_da_scegliere: bool = False
+    costo_inquadramento: dict[str, float] | None = None
 
     @property
     def ammesso_al_forfettario(self) -> bool:
@@ -120,24 +137,61 @@ def previdenza_label(gestione: str) -> str:
     return professioni.LABEL_GESTIONE.get(gestione, gestione)
 
 
-def _gestione_effettiva(prof: professioni.Professione, profilo: Profilo) -> str:
+def _gestione_effettiva(
+    prof: professioni.Professione, profilo: Profilo
+) -> tuple[str, bool]:
+    """Cassa previdenziale applicabile e se resta una scelta da compiere.
+
+    Per le professioni il cui inquadramento dipende dall'organizzazione
+    concreta non si indovina in base al fatturato: si assume la forma
+    professionale, meno onerosa, e si segnala la scelta all'utente.
+    """
     if profilo.gestione_scelta:
-        return profilo.gestione_scelta
+        return profilo.gestione_scelta, False
+
     mappa = {
         professioni.GS: previdenza.GESTIONE_SEPARATA,
         professioni.COMMERCIANTI: previdenza.COMMERCIANTI,
         professioni.ARTIGIANI: previdenza.ARTIGIANI,
         professioni.NESSUNO: previdenza.NESSUNA,
     }
-    # Quando l'inquadramento dipende dal modo in cui lavori, si assume la
-    # forma piu' diffusa: professionale sotto i 30.000 euro, d'impresa sopra.
-    if prof.gestione_inps == professioni.DIPENDE:
-        return (
-            previdenza.COMMERCIANTI
-            if prof.camera_commercio and profilo.ricavi_attesi >= 30_000
-            else previdenza.GESTIONE_SEPARATA
-        )
-    return mappa[prof.gestione_inps]
+    if prof.gestione_inps != professioni.DIPENDE:
+        return mappa[prof.gestione_inps], False
+
+    if profilo.natura_attivita == IMPRESA:
+        gestione = previdenza.COMMERCIANTI if prof.camera_commercio else previdenza.ARTIGIANI
+        return gestione, False
+    if profilo.natura_attivita == PROFESSIONALE:
+        return previdenza.GESTIONE_SEPARATA, False
+
+    return previdenza.GESTIONE_SEPARATA, True
+
+
+def _costo_inquadramento(
+    prof: professioni.Professione, profilo: Profilo, riduzione: int
+) -> dict[str, float]:
+    """Quanto costa, in contributi, l'una o l'altra forma di esercizio."""
+    reddito = profilo.ricavi_attesi * prof.coefficiente
+    gestione_impresa = previdenza.COMMERCIANTI if prof.camera_commercio else previdenza.ARTIGIANI
+
+    come_professionista = previdenza.calcola(
+        reddito,
+        gestione=previdenza.GESTIONE_SEPARATA,
+        mesi_attivita=profilo.mesi_attivita,
+        gia_assicurato=profilo.gia_assicurato_altrove,
+    ).totale
+    come_impresa = previdenza.calcola(
+        reddito,
+        gestione=gestione_impresa,
+        riduzione=riduzione,
+        mesi_attivita=profilo.mesi_attivita,
+    ).totale
+
+    return {
+        "professionale": round(come_professionista, 2),
+        "impresa": round(come_impresa, 2),
+        "differenza": round(come_impresa - come_professionista, 2),
+    }
 
 
 def _verifiche(profilo: Profilo, prof: professioni.Professione) -> tuple[Verifica, ...]:
@@ -384,8 +438,8 @@ def _operazioni_iva(profilo: Profilo, prof: professioni.Professione) -> tuple[tu
 def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
     """Produce la diagnosi completa per un profilo."""
     prof = professioni.get(profilo.professione)
-    gestione = _gestione_effettiva(prof, profilo)
-    verifiche = _verifiche(profilo, prof)
+    gestione, scelta_pendente = _gestione_effettiva(prof, profilo)
+    verifiche = list(_verifiche(profilo, prof))
     bloccato = any(v.esito == BLOCCANTE for v in verifiche)
 
     riduzione = profilo.riduzione_richiesta
@@ -407,6 +461,32 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
     esito = forfettario.calcola(situazione)
     raffronto = confronto.confronta(situazione, profilo.costi_annui)
     piano = forfettario.piano_cassa(situazione, anni=3)
+
+    costo_inquadramento = None
+    if prof.gestione_inps == professioni.DIPENDE:
+        costo_inquadramento = _costo_inquadramento(prof, profilo, riduzione)
+        if scelta_pendente:
+            delta = costo_inquadramento["differenza"]
+            if abs(delta) < 1:
+                verso = "Con i tuoi numeri le due forme costano quasi uguale"
+            elif delta > 0:
+                verso = f"Con i tuoi numeri la forma d'impresa costa {delta:,.0f} euro in piu'"
+            else:
+                verso = f"Con i tuoi numeri la forma d'impresa costa {abs(delta):,.0f} euro in meno"
+            verifiche.append(Verifica(
+                "Inquadramento da confermare",
+                ATTENZIONE,
+                "Questo lavoro puo' essere esercitato in forma professionale o "
+                "d'impresa, e non lo decide il fatturato: dipende da quanto pesano "
+                "l'organizzazione e i mezzi rispetto al tuo apporto personale. "
+                f"{verso}: {costo_inquadramento['professionale']:,.0f} euro in Gestione "
+                f"Separata contro {costo_inquadramento['impresa']:,.0f} come impresa. "
+                "Attenzione pero' al profilo di rischio: la quota fissa dell'impresa e' "
+                "dovuta anche in un anno senza incassi, la Gestione Separata no. "
+                "Il calcolo assume la forma professionale: indica come lavori per "
+                "avere i numeri giusti.",
+                "art. 2195 c.c.; art. 53 TUIR",
+            ))
 
     profilo_scadenze = scadenze.Profilo(
         regime="forfettario",
@@ -446,7 +526,7 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
         profilo=profilo,
         professione=prof,
         gestione=gestione,
-        verifiche=verifiche,
+        verifiche=tuple(verifiche),
         esito_forfettario=esito,
         confronto_regimi=raffronto,
         piano_cassa=piano,
@@ -454,4 +534,6 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
         operazioni_iva=_operazioni_iva(profilo, prof),
         prossime_scadenze=scadenze.prossime(6, da=oggi, profilo=profilo_scadenze),
         avvisi=tuple(dict.fromkeys(avvisi)),
+        inquadramento_da_scegliere=scelta_pendente,
+        costo_inquadramento=costo_inquadramento,
     )

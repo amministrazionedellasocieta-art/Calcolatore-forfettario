@@ -34,8 +34,11 @@ class EsitoOrdinario:
     ricavi: float
     costi: float
     reddito: float
+    reddito_complessivo: float
     contributi: previdenza.Contributi
     imponibile_irpef: float
+    irpef_lorda: float
+    detrazione: float
     irpef: float
     addizionali: float
     scaglioni: tuple[tuple[float, float, float], ...]
@@ -47,6 +50,7 @@ class EsitoOrdinario:
 
     @property
     def imposte(self) -> float:
+        """IRPEF netta (dopo la detrazione, mai negativa) piu' addizionali."""
         return round(self.irpef + self.addizionali, 2)
 
     @property
@@ -89,6 +93,37 @@ def irpef(imponibile: float) -> tuple[float, tuple[tuple[float, float, float], .
     return round(imposta, 2), tuple(dettaglio)
 
 
+def detrazione_lavoro_autonomo(reddito_complessivo: float) -> float:
+    """Detrazione dell'art. 13 c. 5 TUIR, parametrata al reddito complessivo.
+
+    Non e' un dettaglio trascurabile nel confronto tra regimi: sotto i 50.000
+    euro vale fino a 1.265 euro di imposta in meno, e ignorarla fa sembrare
+    l'ordinario piu' caro di quanto sia.
+    """
+    reddito = max(0.0, reddito_complessivo)
+
+    if reddito <= P.DETRAZIONE_AUTONOMI_SOGLIA_PIENA:
+        return P.DETRAZIONE_AUTONOMI_MASSIMA
+
+    if reddito <= P.DETRAZIONE_AUTONOMI_SOGLIA_INTERMEDIA:
+        residuo = P.DETRAZIONE_AUTONOMI_SOGLIA_INTERMEDIA - reddito
+        ampiezza = P.DETRAZIONE_AUTONOMI_SOGLIA_INTERMEDIA - P.DETRAZIONE_AUTONOMI_SOGLIA_PIENA
+        return round(
+            P.DETRAZIONE_AUTONOMI_BASE_INTERMEDIA
+            + P.DETRAZIONE_AUTONOMI_QUOTA_DECRESCENTE * residuo / ampiezza,
+            2,
+        )
+
+    if reddito <= P.DETRAZIONE_AUTONOMI_SOGLIA_AZZERAMENTO:
+        residuo = P.DETRAZIONE_AUTONOMI_SOGLIA_AZZERAMENTO - reddito
+        ampiezza = (
+            P.DETRAZIONE_AUTONOMI_SOGLIA_AZZERAMENTO - P.DETRAZIONE_AUTONOMI_SOGLIA_INTERMEDIA
+        )
+        return round(P.DETRAZIONE_AUTONOMI_BASE_INTERMEDIA * residuo / ampiezza, 2)
+
+    return 0.0
+
+
 def aliquota_marginale(imponibile: float) -> float:
     for limite, aliquota in P.SCAGLIONI_IRPEF:
         if imponibile <= limite:
@@ -108,14 +143,31 @@ def calcola(situazione: SituazioneOrdinario) -> EsitoOrdinario:
         gia_assicurato=s.gia_assicurato,
     )
 
+    reddito_complessivo = reddito + s.altri_redditi
     # I contributi obbligatori sono oneri deducibili dal reddito complessivo.
-    imponibile = max(0.0, reddito + s.altri_redditi - contributi.totale)
+    imponibile = max(0.0, reddito_complessivo - contributi.totale)
     imposta_lorda, dettaglio = irpef(imponibile)
-    addizionali = imponibile * (s.addizionale_regionale + s.addizionale_comunale)
+
+    # La detrazione e' parametrata al reddito complessivo, non all'imponibile,
+    # e non genera credito: al massimo azzera l'imposta.
+    detrazione = detrazione_lavoro_autonomo(reddito_complessivo)
+    detrazione_effettiva = min(detrazione, imposta_lorda)
+    imposta_netta = imposta_lorda - detrazione_effettiva
+
+    # Le addizionali non sono dovute quando l'IRPEF netta e' azzerata dalle
+    # detrazioni (art. 1 c. 4 D.Lgs. 360/1998 per la comunale, analogamente
+    # per la regionale).
+    addizionali = (
+        imponibile * (s.addizionale_regionale + s.addizionale_comunale)
+        if imposta_netta > 0
+        else 0.0
+    )
 
     note = [
-        "Calcolo semplificato: non include detrazioni personali, familiari a "
-        "carico, oneri detraibili e crediti d'imposta, che riducono il dovuto.",
+        f"Detrazione per redditi di lavoro autonomo applicata: "
+        f"{detrazione_effettiva:,.2f} euro (art. 13 c. 5 TUIR).",
+        "Non sono incluse detrazioni personali, familiari a carico e oneri "
+        "detraibili, che riducono ulteriormente il dovuto.",
         "L'IVA non e' un costo: la incassi dal cliente e la riversi allo Stato, "
         "ma detrai quella sugli acquisti (cosa impossibile nel forfettario).",
     ]
@@ -125,13 +177,24 @@ def calcola(situazione: SituazioneOrdinario) -> EsitoOrdinario:
             "4%, che aumenta il compenso concordato."
         )
 
+    if detrazione > detrazione_effettiva:
+        note.append(
+            f"Detrazione non utilizzata per incapienza: {detrazione - detrazione_effettiva:,.2f} "
+            "euro non recuperabili, perche' la detrazione non genera credito."
+        )
+    if imposta_netta <= 0 and imponibile > 0:
+        note.append("IRPEF azzerata dalla detrazione: le addizionali non sono dovute.")
+
     return EsitoOrdinario(
         ricavi=round(s.ricavi, 2),
         costi=round(s.costi, 2),
         reddito=round(reddito, 2),
+        reddito_complessivo=round(reddito_complessivo, 2),
         contributi=contributi,
         imponibile_irpef=round(imponibile, 2),
-        irpef=imposta_lorda,
+        irpef_lorda=imposta_lorda,
+        detrazione=round(detrazione_effettiva, 2),
+        irpef=round(imposta_netta, 2),
         addizionali=round(addizionali, 2),
         scaglioni=dettaglio,
         note=tuple(note),

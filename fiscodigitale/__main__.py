@@ -38,6 +38,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--costi", type=float, default=0.0, help="costi reali annui")
     parser.add_argument("--esteri", type=float, default=0.0,
                         help="acquisti annui di servizi esteri")
+    parser.add_argument("--natura", choices=(diagnosi.PROFESSIONALE, diagnosi.IMPRESA),
+                        help="come eserciti: professionale o impresa. Rilevante solo "
+                             "per i lavori il cui inquadramento non e' univoco")
     parser.add_argument("--non-startup", action="store_true",
                         help="non applicare l'aliquota agevolata al 5 per cento")
     parser.add_argument("--elenco", action="store_true", help="elenca tutte le professioni")
@@ -69,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
             acquisti_servizi_esteri=args.esteri,
             clienti_esteri_b2b=args.esteri > 0,
             prima_attivita=not args.non_startup,
+            natura_attivita=args.natura,
         )
     )
 

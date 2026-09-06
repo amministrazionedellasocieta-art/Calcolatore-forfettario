@@ -122,9 +122,16 @@ SCAGLIONI_IRPEF = (
 ADDIZIONALE_REGIONALE_MEDIA = 0.0173
 ADDIZIONALE_COMUNALE_MEDIA = 0.0060
 
-# Deduzioni/detrazioni minime usate nel confronto (semplificazione dichiarata).
-DETRAZIONE_LAVORO_AUTONOMO_MAX = 1_265.0
-NO_TAX_AREA_AUTONOMI = 5_500.0
+# Detrazione per redditi di lavoro autonomo e altri redditi (art. 13 c. 5 TUIR).
+# Decresce a scaglioni e si azzera a 50.000 euro di reddito complessivo.
+# La funzione e' continua nei due punti di raccordo, e l'importo massimo
+# azzera esattamente l'imposta sul minimo (5.500 x 23% = 1.265).
+DETRAZIONE_AUTONOMI_MASSIMA = 1_265.0
+DETRAZIONE_AUTONOMI_SOGLIA_PIENA = 5_500.0      # no tax area del lavoro autonomo
+DETRAZIONE_AUTONOMI_SOGLIA_INTERMEDIA = 28_000.0
+DETRAZIONE_AUTONOMI_SOGLIA_AZZERAMENTO = 50_000.0
+DETRAZIONE_AUTONOMI_BASE_INTERMEDIA = 500.0
+DETRAZIONE_AUTONOMI_QUOTA_DECRESCENTE = 765.0
 
 IRAP_ALIQUOTA_ORDINARIA = 0.039  # dovuta solo con autonoma organizzazione
 

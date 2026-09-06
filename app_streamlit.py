@@ -73,6 +73,24 @@ scelta = st.sidebar.selectbox(
     format_func=lambda p: p.nome,
 )
 
+natura = None
+if scelta.gestione_inps == professioni.DIPENDE:
+    st.sidebar.warning(
+        "Per questo lavoro l'inquadramento non e' scontato: cambia la cassa "
+        "previdenziale e i contributi dovuti."
+    )
+    natura = st.sidebar.radio(
+        "Come eserciti l'attivita'?",
+        (diagnosi.PROFESSIONALE, diagnosi.IMPRESA),
+        format_func=lambda x: {
+            diagnosi.PROFESSIONALE: "Lavoro autonomo: conta soprattutto il mio apporto personale",
+            diagnosi.IMPRESA: "Impresa: uso mezzi, personale o una struttura organizzata",
+        }[x],
+        index=None,
+        help="Non dipende dal fatturato ma da come e' organizzata l'attivita'. "
+             "Lascia vuoto per vedere il confronto tra le due forme.",
+    )
+
 st.sidebar.markdown("---")
 
 ricavi = st.sidebar.number_input(
@@ -151,6 +169,7 @@ profilo = diagnosi.Profilo(
     gia_assicurato_altrove=gia_assicurato,
     prima_iscrizione_2025=prima_iscrizione_2025,
     riduzione_richiesta=riduzione,
+    natura_attivita=natura,
 )
 
 esame = diagnosi.analizza(profilo)
@@ -194,6 +213,24 @@ with tab_diagnosi:
     c4.metric("Camera di Commercio", "Sì" if esame.professione.camera_commercio else "No")
 
     st.caption(esame.professione.ateco_descrizione)
+
+    if esame.inquadramento_da_scegliere and esame.costo_inquadramento:
+        costo = esame.costo_inquadramento
+        st.warning(
+            "**Manca una scelta che cambia i numeri.** Questo lavoro puo' essere "
+            "esercitato come libero professionista o come impresa, e non lo decide "
+            "il fatturato: dipende da quanto pesano organizzazione e mezzi rispetto "
+            "al tuo apporto personale. Indicalo nella barra laterale."
+        )
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Contributi da professionista", euro(costo["professionale"]))
+        c2.metric("Contributi da impresa", euro(costo["impresa"]))
+        c3.metric("Differenza", euro(abs(costo["differenza"])))
+        st.caption(
+            "I numeri qui sotto assumono la forma professionale. Da impresa si "
+            "aggiungono l'iscrizione al Registro Imprese e una quota fissa dovuta "
+            "anche in un anno senza incassi."
+        )
 
     st.markdown("### Requisiti")
     for v in esame.verifiche:
@@ -309,6 +346,30 @@ with tab_numeri:
         delta=("forfettario" if raffronto.conviene == "forfettario" else "ordinario"),
     )
     st.info(raffronto.sintesi)
+
+    with st.expander("Come si compone il conto in regime ordinario"):
+        o = raffronto.esito_ordinario
+        righe_ord = [
+            ("Ricavi", o.ricavi),
+            ("− Costi deducibili", -o.costi),
+            ("= Reddito", o.reddito),
+            ("− Contributi (oneri deducibili)", -o.contributi_dovuti),
+            ("= Imponibile IRPEF", o.imponibile_irpef),
+            ("IRPEF lorda", o.irpef_lorda),
+            ("− Detrazione lavoro autonomo", -o.detrazione),
+            ("= IRPEF netta", o.irpef),
+            ("+ Addizionali", o.addizionali),
+        ]
+        st.dataframe(
+            pd.DataFrame(righe_ord, columns=["Voce", "Importo"]).style.format(
+                {"Importo": lambda v: euro(v, 2)}
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+        st.caption(f"Aliquota marginale: {percentuale(o.aliquota_marginale, 0)}")
+        for nota in o.note:
+            st.caption(nota)
 
     if raffronto.costi_di_pareggio:
         curva = []
