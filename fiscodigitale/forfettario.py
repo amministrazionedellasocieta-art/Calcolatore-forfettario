@@ -21,6 +21,51 @@ from . import previdenza
 
 
 @dataclass(frozen=True)
+class Componente:
+    """Una fonte di ricavo con il proprio coefficiente di redditivita'.
+
+    Chi lavora nel digitale raramente ha una sola attivita': sponsorizzazioni
+    al 78% e ricavi pubblicitari al 67% convivono nella stessa partita IVA.
+    """
+
+    etichetta: str
+    ricavi: float
+    coefficiente: float
+    ateco: str = ""
+
+    def __post_init__(self) -> None:
+        if self.ricavi < 0:
+            raise ValueError("i ricavi di una componente non possono essere negativi")
+        if not 0 < self.coefficiente <= 1:
+            raise ValueError("il coefficiente va espresso tra 0 e 1")
+
+    @property
+    def reddito(self) -> float:
+        return round(self.ricavi * self.coefficiente, 2)
+
+
+def coefficiente_medio(componenti: "tuple[Componente, ...] | list[Componente]") -> float:
+    """Coefficiente unico equivalente a piu' attivita' con coefficienti diversi.
+
+    Con piu' codici ATECO il reddito e' la somma dei ricavi di ciascuna
+    attivita' moltiplicati per il proprio coefficiente (art. 1 c. 64
+    L. 190/2014). La media ponderata sui ricavi produce esattamente lo stesso
+    reddito, e permette di riusare senza modifiche tutto il resto del motore.
+    """
+    componenti = tuple(componenti)
+    if not componenti:
+        raise ValueError("serve almeno una componente")
+
+    ricavi_totali = sum(c.ricavi for c in componenti)
+    if ricavi_totali <= 0:
+        # Nessun ricavo: il coefficiente non ha effetto, si prende il primo
+        # per non restituire un valore fuori dominio.
+        return componenti[0].coefficiente
+
+    return sum(c.reddito for c in componenti) / ricavi_totali
+
+
+@dataclass(frozen=True)
 class Situazione:
     """Input del calcolo."""
 

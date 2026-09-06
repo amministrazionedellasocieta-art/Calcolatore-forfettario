@@ -570,5 +570,162 @@ class TestDiagnosi(unittest.TestCase):
             self.assertGreaterEqual(d.esito_forfettario.totale_dovuto, 0)
 
 
+class TestMultiAttivita(unittest.TestCase):
+    def componenti(self):
+        return (
+            forfettario.Componente("Sponsorizzazioni", 30_000, 0.78, "73.11.03"),
+            forfettario.Componente("AdSense", 15_000, 0.67, "59.11.00"),
+        )
+
+    def test_coefficiente_medio_ponderato(self):
+        atteso = (30_000 * 0.78 + 15_000 * 0.67) / 45_000
+        self.assertAlmostEqual(forfettario.coefficiente_medio(self.componenti()), atteso, places=9)
+
+    def test_media_produce_lo_stesso_reddito_dei_singoli(self):
+        componenti = self.componenti()
+        medio = forfettario.coefficiente_medio(componenti)
+        self.assertAlmostEqual(
+            sum(c.reddito for c in componenti),
+            sum(c.ricavi for c in componenti) * medio,
+            places=2,
+        )
+
+    def test_coefficiente_medio_una_sola_componente(self):
+        solo = (forfettario.Componente("Unica", 10_000, 0.67),)
+        self.assertAlmostEqual(forfettario.coefficiente_medio(solo), 0.67, places=9)
+
+    def test_coefficiente_medio_senza_componenti(self):
+        with self.assertRaises(ValueError):
+            forfettario.coefficiente_medio(())
+
+    def test_coefficiente_medio_ricavi_nulli(self):
+        vuote = (forfettario.Componente("Nessun incasso", 0, 0.78),)
+        self.assertEqual(forfettario.coefficiente_medio(vuote), 0.78)
+
+    def test_componente_valida_gli_input(self):
+        with self.assertRaises(ValueError):
+            forfettario.Componente("x", -1, 0.78)
+        with self.assertRaises(ValueError):
+            forfettario.Componente("x", 100, 78)
+
+    def test_diagnosi_applica_ogni_coefficiente_alla_sua_attivita(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="influencer",
+            ricavi_attesi=30_000,
+            altre_attivita=(diagnosi.AltraAttivita("youtuber", 15_000),),
+        ))
+        self.assertTrue(d.multi_attivita)
+        self.assertAlmostEqual(
+            d.esito_forfettario.reddito_forfetario,
+            30_000 * 0.78 + 15_000 * 0.67,
+            places=2,
+        )
+
+    def test_soglia_misurata_sulla_somma_dei_ricavi(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="ecommerce",
+            ricavi_attesi=60_000,
+            altre_attivita=(diagnosi.AltraAttivita("copywriter", 40_000),),
+        ))
+        self.assertEqual(d.ricavi_totali, 100_000)
+        limite = next(v for v in d.verifiche if v.nome == "Limite dei ricavi")
+        self.assertEqual(limite.esito, diagnosi.ATTENZIONE)
+
+    def test_somma_oltre_100k_blocca(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="ecommerce",
+            ricavi_attesi=60_000,
+            altre_attivita=(diagnosi.AltraAttivita("copywriter", 50_000),),
+        ))
+        self.assertFalse(d.ammesso_al_forfettario)
+
+    def test_gestione_segue_la_prevalente_non_la_dichiarata(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="copywriter",
+            ricavi_attesi=5_000,
+            altre_attivita=(diagnosi.AltraAttivita("ecommerce", 40_000),),
+        ))
+        self.assertEqual(d.gestione, previdenza.COMMERCIANTI)
+        self.assertTrue(any(v.nome == "Attivita' prevalente" for v in d.verifiche))
+
+    def test_prevalente_coincidente_non_genera_avviso(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="ecommerce",
+            ricavi_attesi=40_000,
+            altre_attivita=(diagnosi.AltraAttivita("copywriter", 5_000),),
+        ))
+        self.assertFalse(any(v.nome == "Attivita' prevalente" for v in d.verifiche))
+
+    def test_nature_diverse_stimano_la_doppia_iscrizione(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="ecommerce",
+            ricavi_attesi=40_000,
+            altre_attivita=(diagnosi.AltraAttivita("copywriter", 10_000),),
+        ))
+        self.assertIsNotNone(d.contributi_doppia_iscrizione)
+        atteso = (
+            previdenza.gestione_separata(10_000 * 0.78).totale
+            + previdenza.artigiani_commercianti(
+                40_000 * 0.40, gestione=previdenza.COMMERCIANTI
+            ).totale
+        )
+        self.assertAlmostEqual(d.contributi_doppia_iscrizione, atteso, places=2)
+        self.assertTrue(any(v.nome == "Attivita' di natura diversa" for v in d.verifiche))
+
+    def test_stessa_natura_non_genera_doppia_iscrizione(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="copywriter",
+            ricavi_attesi=20_000,
+            altre_attivita=(diagnosi.AltraAttivita("traduttore", 10_000),),
+        ))
+        self.assertIsNone(d.contributi_doppia_iscrizione)
+
+    def test_attivita_singola_resta_invariata(self):
+        d = diagnosi.analizza(diagnosi.Profilo(professione="copywriter", ricavi_attesi=30_000))
+        self.assertFalse(d.multi_attivita)
+        self.assertIsNone(d.contributi_doppia_iscrizione)
+        self.assertAlmostEqual(d.coefficiente_medio, 0.78, places=9)
+
+    def test_professione_ripetuta_rifiutata(self):
+        with self.assertRaises(ValueError):
+            diagnosi.Profilo(
+                professione="copywriter",
+                ricavi_attesi=10_000,
+                altre_attivita=(diagnosi.AltraAttivita("copywriter", 5_000),),
+            )
+
+    def test_slug_sconosciuto_rifiutato_subito(self):
+        with self.assertRaises(ValueError) as ctx:
+            diagnosi.AltraAttivita("non-esiste", 1_000)
+        self.assertIn("professione sconosciuta", str(ctx.exception))
+        with self.assertRaises(ValueError):
+            diagnosi.Profilo(professione="nemmeno-questa", ricavi_attesi=1_000)
+
+    def test_altra_attivita_valida_i_ricavi(self):
+        with self.assertRaises(ValueError):
+            diagnosi.AltraAttivita("copywriter", -100)
+
+    def test_natura_per_singola_attivita(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="streamer",
+            ricavi_attesi=30_000,
+            natura_attivita=diagnosi.IMPRESA,
+            altre_attivita=(
+                diagnosi.AltraAttivita("videomaker", 5_000, diagnosi.PROFESSIONALE),
+            ),
+        ))
+        self.assertEqual(d.gestione, previdenza.COMMERCIANTI)
+        self.assertFalse(d.inquadramento_da_scegliere)
+
+    def test_sintesi_elenca_i_codici(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="influencer",
+            ricavi_attesi=30_000,
+            altre_attivita=(diagnosi.AltraAttivita("youtuber", 15_000),),
+        ))
+        self.assertIn("73.11.03", d.sintesi())
+        self.assertIn("59.11.00", d.sintesi())
+
+
 if __name__ == "__main__":
     unittest.main()

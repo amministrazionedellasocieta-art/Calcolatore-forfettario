@@ -108,6 +108,39 @@ costi = st.sidebar.number_input(
 prima_attivita = st.sidebar.checkbox("Nuova attivita' (aliquota 5%)", value=True)
 mesi = st.sidebar.slider("Mesi di attivita' nell'anno", 1, 12, 12)
 
+with st.sidebar.expander("Altre fonti di ricavo"):
+    st.caption(
+        "Con piu' codici ATECO ogni attivita' usa il proprio coefficiente, ma il "
+        "limite degli 85.000 euro si misura sulla somma dei ricavi."
+    )
+    altre_scelte = st.multiselect(
+        "Aggiungi altre attivita'",
+        [p for p in professioni.CATALOGO if p.slug != scelta.slug],
+        format_func=lambda p: p.nome,
+    )
+    altre_attivita = []
+    for altra in altre_scelte:
+        ricavi_altra = st.number_input(
+            f"Ricavi da {altra.nome} (€)",
+            min_value=0,
+            max_value=300_000,
+            value=10_000,
+            step=1_000,
+            key=f"ricavi_{altra.slug}",
+        )
+        natura_altra = None
+        if altra.gestione_inps == professioni.DIPENDE:
+            natura_altra = st.radio(
+                f"Natura di {altra.nome}",
+                (diagnosi.PROFESSIONALE, diagnosi.IMPRESA),
+                format_func=lambda x: "Professionale" if x == diagnosi.PROFESSIONALE else "Impresa",
+                index=None,
+                key=f"natura_{altra.slug}",
+            )
+        altre_attivita.append(
+            diagnosi.AltraAttivita(altra.slug, float(ricavi_altra), natura_altra)
+        )
+
 with st.sidebar.expander("Come incassi"):
     clienti_esteri = st.checkbox("Fatturo a piattaforme o aziende estere", value=True)
     vendite_privati_ue = st.number_input(
@@ -170,6 +203,7 @@ profilo = diagnosi.Profilo(
     prima_iscrizione_2025=prima_iscrizione_2025,
     riduzione_richiesta=riduzione,
     natura_attivita=natura,
+    altre_attivita=tuple(altre_attivita),
 )
 
 esame = diagnosi.analizza(profilo)
@@ -207,12 +241,50 @@ with tab_diagnosi:
     st.write(esame.sintesi())
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Codice ATECO", esame.professione.ateco or "—")
-    c2.metric("Coefficiente", f"{esame.professione.coefficiente_pct}%")
+    if esame.multi_attivita:
+        c1.metric("Codici ATECO", f"{len(esame.attivita)} attivita'")
+        c2.metric("Coefficiente medio", percentuale(esame.coefficiente_medio, 1))
+    else:
+        c1.metric("Codice ATECO", esame.professione.ateco or "—")
+        c2.metric("Coefficiente", f"{esame.professione.coefficiente_pct}%")
     c3.metric("Cassa previdenziale", diagnosi.previdenza_label(esame.gestione).replace("INPS", "").strip())
     c4.metric("Camera di Commercio", "Sì" if esame.professione.camera_commercio else "No")
 
     st.caption(esame.professione.ateco_descrizione)
+
+    if esame.multi_attivita:
+        st.markdown("### Le tue attivita'")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Attivita'": a.professione.nome,
+                        "ATECO": a.professione.ateco or "—",
+                        "Ricavi": a.ricavi,
+                        "Coefficiente": f"{a.professione.coefficiente_pct}%",
+                        "Reddito imponibile": a.reddito,
+                        "Previdenza": diagnosi.previdenza_label(a.gestione),
+                    }
+                    for a in esame.attivita
+                ]
+            ).style.format({"Ricavi": lambda v: euro(v), "Reddito imponibile": lambda v: euro(v)}),
+            hide_index=True,
+            width="stretch",
+        )
+        st.caption(
+            f"Ricavi totali {euro(esame.ricavi_totali)} · reddito imponibile "
+            f"{euro(esame.esito_forfettario.reddito_forfetario)} · coefficiente medio "
+            f"{percentuale(esame.coefficiente_medio, 1)}. Il limite degli "
+            f"{euro(P.SOGLIA_RICAVI)} si misura sulla somma; l'inquadramento "
+            "previdenziale segue l'attivita' prevalente per ricavi."
+        )
+        if esame.contributi_doppia_iscrizione:
+            st.warning(
+                "Stai cumulando attivita' di natura diversa. Se INPS richiede "
+                "l'iscrizione a entrambe le gestioni i contributi passano da "
+                f"{euro(esame.esito_forfettario.contributi_dovuti)} a "
+                f"{euro(esame.contributi_doppia_iscrizione)}."
+            )
 
     if esame.inquadramento_da_scegliere and esame.costo_inquadramento:
         costo = esame.costo_inquadramento
@@ -286,7 +358,11 @@ with tab_numeri:
         st.markdown("#### Come si arriva al netto")
         righe = [
             ("Ricavi", e.ricavi),
-            (f"Reddito forfetario ({esame.professione.coefficiente_pct}%)", e.reddito_forfetario),
+            (
+                f"Reddito forfetario ({percentuale(esame.coefficiente_medio, 1)}"
+                + (" medio)" if esame.multi_attivita else ")"),
+                e.reddito_forfetario,
+            ),
             ("− Contributi dedotti", -e.contributi_dedotti),
             ("= Imponibile", e.imponibile),
             (f"− Imposta sostitutiva ({percentuale(e.aliquota, 0)})", -e.imposta_sostitutiva),
@@ -373,12 +449,12 @@ with tab_numeri:
 
     if raffronto.costi_di_pareggio:
         curva = []
-        passo = max(500, int(ricavi / 40)) if ricavi else 500
-        for costo in range(0, int(ricavi) + 1, passo):
+        passo = max(500, int(esame.ricavi_totali / 40)) if esame.ricavi_totali else 500
+        for costo in range(0, int(esame.ricavi_totali) + 1, passo):
             c = mod_confronto.confronta(
                 forfettario.Situazione(
-                    ricavi=float(ricavi),
-                    coefficiente=esame.professione.coefficiente,
+                    ricavi=esame.ricavi_totali,
+                    coefficiente=esame.coefficiente_medio,
                     gestione=esame.gestione,
                     startup=prima_attivita,
                     riduzione=e.contributi.riduzione_applicata,
@@ -434,8 +510,8 @@ with tab_numeri:
         necessari = forfettario.ricavi_per_netto_obiettivo(
             float(obiettivo) + profilo.costi_annui + esame.iva_estera_annua,
             forfettario.Situazione(
-                ricavi=float(ricavi) or 1.0,
-                coefficiente=esame.professione.coefficiente,
+                ricavi=esame.ricavi_totali or 1.0,
+                coefficiente=esame.coefficiente_medio,
                 gestione=esame.gestione,
                 startup=prima_attivita,
                 riduzione=e.contributi.riduzione_applicata,
@@ -634,7 +710,7 @@ with tab_conti:
         accantonamento = registro.accantonamento(
             forfettario.Situazione(
                 ricavi=max(registro.incassi, 1.0),
-                coefficiente=esame.professione.coefficiente,
+                coefficiente=esame.coefficiente_medio,
                 gestione=esame.gestione,
                 startup=prima_attivita,
                 riduzione=e.contributi.riduzione_applicata,

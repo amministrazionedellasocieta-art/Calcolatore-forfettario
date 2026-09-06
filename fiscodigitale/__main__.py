@@ -38,6 +38,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--costi", type=float, default=0.0, help="costi reali annui")
     parser.add_argument("--esteri", type=float, default=0.0,
                         help="acquisti annui di servizi esteri")
+    parser.add_argument("--altra", action="append", default=[], metavar="SLUG:RICAVI",
+                        help="altra fonte di ricavo con codice ATECO diverso, "
+                             "ripetibile (es. --altra youtuber:15000)")
     parser.add_argument("--natura", choices=(diagnosi.PROFESSIONALE, diagnosi.IMPRESA),
                         help="come eserciti: professionale o impresa. Rilevante solo "
                              "per i lavori il cui inquadramento non e' univoco")
@@ -63,6 +66,16 @@ def main(argv: list[str] | None = None) -> int:
         if not args.professione:
             return 0
 
+    altre = []
+    for voce in args.altra:
+        if ":" not in voce:
+            parser.error(f"formato non valido per --altra: {voce!r} (atteso SLUG:RICAVI)")
+        altro_slug, _, importo = voce.partition(":")
+        try:
+            altre.append(diagnosi.AltraAttivita(altro_slug.strip(), float(importo)))
+        except (ValueError, KeyError) as errore:
+            parser.error(f"--altra {voce!r}: {errore}")
+
     slug = args.professione or professioni.cerca(args.cerca)[0].slug
     esito = diagnosi.analizza(
         diagnosi.Profilo(
@@ -73,11 +86,18 @@ def main(argv: list[str] | None = None) -> int:
             clienti_esteri_b2b=args.esteri > 0,
             prima_attivita=not args.non_startup,
             natura_attivita=args.natura,
+            altre_attivita=tuple(altre),
         )
     )
 
     _riga(esito.professione.nome)
     print(esito.sintesi())
+
+    if esito.multi_attivita:
+        _riga("Attivita'")
+        for a in esito.attivita:
+            print(f"  {a.professione.nome[:34]:<36} {_euro(a.ricavi):>14}  "
+                  f"x {a.professione.coefficiente_pct}%  = {_euro(a.reddito)}")
 
     _riga("Requisiti")
     for v in esito.verifiche:

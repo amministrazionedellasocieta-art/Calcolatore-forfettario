@@ -41,6 +41,50 @@ class Adempimento:
     costo_indicativo: str = ""
 
 
+def _verifica_slug(slug: str) -> None:
+    """Fallisce subito, con un messaggio leggibile, se la professione non esiste."""
+    if slug not in professioni.slugs():
+        raise ValueError(
+            f"professione sconosciuta: {slug!r}. "
+            "Usa uno degli slug del catalogo (fiscodigitale --elenco)."
+        )
+
+
+@dataclass(frozen=True)
+class AltraAttivita:
+    """Una fonte di ricavo ulteriore rispetto all'attivita' principale."""
+
+    professione: str
+    ricavi: float
+    natura_attivita: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.ricavi < 0:
+            raise ValueError("i ricavi di un'attivita' non possono essere negativi")
+        if self.natura_attivita not in (None, PROFESSIONALE, IMPRESA):
+            raise ValueError(f"natura_attivita non valida: {self.natura_attivita!r}")
+        _verifica_slug(self.professione)
+
+
+@dataclass(frozen=True)
+class AttivitaRisolta:
+    """Un'attivita' con il suo inquadramento gia' determinato."""
+
+    professione: professioni.Professione
+    ricavi: float
+    gestione: str
+    scelta_pendente: bool
+    componente: forfettario.Componente
+
+    @property
+    def reddito(self) -> float:
+        return self.componente.reddito
+
+    @property
+    def e_impresa(self) -> bool:
+        return self.gestione in previdenza.GESTIONI_IMPRESA
+
+
 @dataclass(frozen=True)
 class Profilo:
     """Come lavori davvero."""
@@ -51,6 +95,12 @@ class Profilo:
     prima_attivita: bool = True
     mesi_attivita: int = 12
     gestione_scelta: str | None = None
+    altre_attivita: tuple[AltraAttivita, ...] = ()
+    """Altre fonti di ricavo con codice ATECO diverso da quello principale.
+
+    Con piu' attivita' il limite degli 85.000 euro si misura sulla somma dei
+    ricavi, ma il coefficiente si applica a ciascuna separatamente.
+    """
     natura_attivita: str | None = None
     """Come eserciti: "professionale" o "impresa".
 
@@ -76,10 +126,24 @@ class Profilo:
     def __post_init__(self) -> None:
         if self.ricavi_attesi < 0:
             raise ValueError("i ricavi attesi non possono essere negativi")
+        _verifica_slug(self.professione)
         if self.natura_attivita not in (None, PROFESSIONALE, IMPRESA):
             raise ValueError(
                 f"natura_attivita non valida: {self.natura_attivita!r}"
             )
+        slugs = [self.professione] + [a.professione for a in self.altre_attivita]
+        if len(slugs) != len(set(slugs)):
+            raise ValueError(
+                "la stessa professione compare piu' volte: somma i ricavi in una sola voce"
+            )
+
+    @property
+    def ricavi_totali(self) -> float:
+        return round(self.ricavi_attesi + sum(a.ricavi for a in self.altre_attivita), 2)
+
+    @property
+    def multi_attivita(self) -> bool:
+        return bool(self.altre_attivita)
 
 
 @dataclass(frozen=True)
@@ -97,6 +161,17 @@ class Diagnosi:
     avvisi: tuple[str, ...]
     inquadramento_da_scegliere: bool = False
     costo_inquadramento: dict[str, float] | None = None
+    attivita: tuple[AttivitaRisolta, ...] = ()
+    coefficiente_medio: float = 0.0
+    contributi_doppia_iscrizione: float | None = None
+
+    @property
+    def multi_attivita(self) -> bool:
+        return len(self.attivita) > 1
+
+    @property
+    def ricavi_totali(self) -> float:
+        return self.profilo.ricavi_totali
 
     @property
     def ammesso_al_forfettario(self) -> bool:
@@ -123,10 +198,23 @@ class Diagnosi:
                 "non e' accessibile. Il calcolo mostra comunque il confronto con "
                 "l'ordinario."
             )
+        if self.multi_attivita:
+            codici = ", ".join(
+                f"{a.professione.ateco or 'senza codice'} al {a.professione.coefficiente_pct}%"
+                for a in self.attivita
+            )
+            intestazione = (
+                f"{len(self.attivita)} attivita' ({codici}), coefficiente medio "
+                f"{self.coefficiente_medio * 100:.1f}%, {previdenza_label(self.gestione)}."
+            )
+        else:
+            intestazione = (
+                f"{self.professione.nome} - ATECO {self.professione.ateco}, coefficiente "
+                f"{self.professione.coefficiente_pct}%, {previdenza_label(self.gestione)}."
+            )
         return (
-            f"{self.professione.nome} - ATECO {self.professione.ateco}, coefficiente "
-            f"{self.professione.coefficiente_pct}%, {previdenza_label(self.gestione)}. "
-            f"Su {self.profilo.ricavi_attesi:,.0f} euro di ricavi versi "
+            f"{intestazione} "
+            f"Su {self.ricavi_totali:,.0f} euro di ricavi versi "
             f"{self.esito_forfettario.totale_dovuto:,.0f} euro tra imposta e contributi "
             f"({self.esito_forfettario.pressione_effettiva * 100:.1f}%) e ne restano "
             f"{self.netto_reale:,.0f} netti."
@@ -138,7 +226,9 @@ def previdenza_label(gestione: str) -> str:
 
 
 def _gestione_effettiva(
-    prof: professioni.Professione, profilo: Profilo
+    prof: professioni.Professione,
+    natura_attivita: str | None = None,
+    gestione_scelta: str | None = None,
 ) -> tuple[str, bool]:
     """Cassa previdenziale applicabile e se resta una scelta da compiere.
 
@@ -146,8 +236,8 @@ def _gestione_effettiva(
     concreta non si indovina in base al fatturato: si assume la forma
     professionale, meno onerosa, e si segnala la scelta all'utente.
     """
-    if profilo.gestione_scelta:
-        return profilo.gestione_scelta, False
+    if gestione_scelta:
+        return gestione_scelta, False
 
     mappa = {
         professioni.GS: previdenza.GESTIONE_SEPARATA,
@@ -158,20 +248,65 @@ def _gestione_effettiva(
     if prof.gestione_inps != professioni.DIPENDE:
         return mappa[prof.gestione_inps], False
 
-    if profilo.natura_attivita == IMPRESA:
+    if natura_attivita == IMPRESA:
         gestione = previdenza.COMMERCIANTI if prof.camera_commercio else previdenza.ARTIGIANI
         return gestione, False
-    if profilo.natura_attivita == PROFESSIONALE:
+    if natura_attivita == PROFESSIONALE:
         return previdenza.GESTIONE_SEPARATA, False
 
     return previdenza.GESTIONE_SEPARATA, True
 
 
+def _risolvi_attivita(profilo: Profilo) -> tuple[AttivitaRisolta, ...]:
+    """Determina inquadramento e componente di reddito per ogni attivita'."""
+    voci: list[tuple[str, float, str | None]] = [
+        (profilo.professione, profilo.ricavi_attesi, profilo.natura_attivita)
+    ]
+    voci.extend((a.professione, a.ricavi, a.natura_attivita) for a in profilo.altre_attivita)
+
+    risolte: list[AttivitaRisolta] = []
+    for slug, ricavi, natura in voci:
+        prof = professioni.get(slug)
+        gestione, pendente = _gestione_effettiva(prof, natura, profilo.gestione_scelta)
+        risolte.append(AttivitaRisolta(
+            professione=prof,
+            ricavi=round(ricavi, 2),
+            gestione=gestione,
+            scelta_pendente=pendente,
+            componente=forfettario.Componente(
+                etichetta=prof.nome,
+                ricavi=ricavi,
+                coefficiente=prof.coefficiente,
+                ateco=prof.ateco,
+            ),
+        ))
+    return tuple(risolte)
+
+
+def _contributi_doppia_iscrizione(
+    attivita: tuple[AttivitaRisolta, ...], profilo: Profilo, riduzione: int
+) -> float:
+    """Contributi se INPS richiede l'iscrizione a entrambe le gestioni."""
+    reddito_professionale = sum(a.reddito for a in attivita if not a.e_impresa)
+    reddito_impresa = sum(a.reddito for a in attivita if a.e_impresa)
+    gestione_impresa = next(a.gestione for a in attivita if a.e_impresa)
+
+    totale = previdenza.gestione_separata(
+        reddito_professionale, gia_assicurato=profilo.gia_assicurato_altrove
+    ).totale
+    totale += previdenza.artigiani_commercianti(
+        reddito_impresa,
+        gestione=gestione_impresa,
+        riduzione=riduzione,
+        mesi_attivita=profilo.mesi_attivita,
+    ).totale
+    return round(totale, 2)
+
+
 def _costo_inquadramento(
-    prof: professioni.Professione, profilo: Profilo, riduzione: int
+    prof: professioni.Professione, profilo: Profilo, riduzione: int, reddito: float
 ) -> dict[str, float]:
     """Quanto costa, in contributi, l'una o l'altra forma di esercizio."""
-    reddito = profilo.ricavi_attesi * prof.coefficiente
     gestione_impresa = previdenza.COMMERCIANTI if prof.camera_commercio else previdenza.ARTIGIANI
 
     come_professionista = previdenza.calcola(
@@ -197,18 +332,21 @@ def _costo_inquadramento(
 def _verifiche(profilo: Profilo, prof: professioni.Professione) -> tuple[Verifica, ...]:
     v: list[Verifica] = []
     soglia_ragguagliata = P.SOGLIA_RICAVI * profilo.mesi_attivita / 12
+    # Con piu' codici ATECO il limite si misura sulla somma dei ricavi di
+    # tutte le attivita' (art. 1 c. 54 L. 190/2014).
+    ricavi = profilo.ricavi_totali
 
-    if profilo.ricavi_attesi > P.SOGLIA_USCITA_IMMEDIATA:
+    if ricavi > P.SOGLIA_USCITA_IMMEDIATA:
         v.append(Verifica(
             "Limite dei ricavi", BLOCCANTE,
-            f"Ricavi previsti di {profilo.ricavi_attesi:,.0f} euro: oltre "
+            f"Ricavi previsti di {ricavi:,.0f} euro: oltre "
             f"{P.SOGLIA_USCITA_IMMEDIATA:,.0f} euro il regime decade nell'anno stesso.",
             "art. 1 c. 71 L. 190/2014",
         ))
-    elif profilo.ricavi_attesi > soglia_ragguagliata:
+    elif ricavi > soglia_ragguagliata:
         v.append(Verifica(
             "Limite dei ricavi", ATTENZIONE,
-            f"Ricavi previsti di {profilo.ricavi_attesi:,.0f} euro contro un limite di "
+            f"Ricavi previsti di {ricavi:,.0f} euro contro un limite di "
             f"{soglia_ragguagliata:,.0f}: userai il forfettario quest'anno e passerai "
             "all'ordinario dal prossimo.",
             "art. 1 c. 54 L. 190/2014",
@@ -216,8 +354,8 @@ def _verifiche(profilo: Profilo, prof: professioni.Professione) -> tuple[Verific
     else:
         v.append(Verifica(
             "Limite dei ricavi", OK,
-            f"{profilo.ricavi_attesi:,.0f} euro su un limite di {soglia_ragguagliata:,.0f}: "
-            f"hai ancora {soglia_ragguagliata - profilo.ricavi_attesi:,.0f} euro di margine.",
+            f"{ricavi:,.0f} euro su un limite di {soglia_ragguagliata:,.0f}: "
+            f"hai ancora {soglia_ragguagliata - ricavi:,.0f} euro di margine.",
         ))
 
     if profilo.redditi_dipendente_anno_precedente > P.SOGLIA_REDDITI_DIPENDENTE:
@@ -438,7 +576,14 @@ def _operazioni_iva(profilo: Profilo, prof: professioni.Professione) -> tuple[tu
 def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
     """Produce la diagnosi completa per un profilo."""
     prof = professioni.get(profilo.professione)
-    gestione, scelta_pendente = _gestione_effettiva(prof, profilo)
+    attivita = _risolvi_attivita(profilo)
+
+    # L'inquadramento previdenziale segue l'attivita' prevalente per ricavi,
+    # non quella dichiarata per prima.
+    prevalente = max(attivita, key=lambda a: a.ricavi)
+    gestione, scelta_pendente = prevalente.gestione, prevalente.scelta_pendente
+
+    coefficiente = forfettario.coefficiente_medio([a.componente for a in attivita])
     verifiche = list(_verifiche(profilo, prof))
     bloccato = any(v.esito == BLOCCANTE for v in verifiche)
 
@@ -449,8 +594,8 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
         riduzione = 35  # dal 2026 la riduzione al 50% non e' piu' richiedibile
 
     situazione = forfettario.Situazione(
-        ricavi=profilo.ricavi_attesi,
-        coefficiente=prof.coefficiente,
+        ricavi=profilo.ricavi_totali,
+        coefficiente=coefficiente,
         gestione=gestione,
         startup=profilo.prima_attivita and not bloccato,
         riduzione=riduzione,
@@ -463,8 +608,10 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
     piano = forfettario.piano_cassa(situazione, anni=3)
 
     costo_inquadramento = None
-    if prof.gestione_inps == professioni.DIPENDE:
-        costo_inquadramento = _costo_inquadramento(prof, profilo, riduzione)
+    if prevalente.professione.gestione_inps == professioni.DIPENDE:
+        costo_inquadramento = _costo_inquadramento(
+            prevalente.professione, profilo, riduzione, prevalente.reddito
+        )
         if scelta_pendente:
             delta = costo_inquadramento["differenza"]
             if abs(delta) < 1:
@@ -486,6 +633,36 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
                 "Il calcolo assume la forma professionale: indica come lavori per "
                 "avere i numeri giusti.",
                 "art. 2195 c.c.; art. 53 TUIR",
+            ))
+
+    contributi_doppia = None
+    if profilo.multi_attivita:
+        attive = tuple(a for a in attivita if a.ricavi > 0)
+        if prevalente.professione.slug != prof.slug:
+            verifiche.append(Verifica(
+                "Attivita' prevalente",
+                ATTENZIONE,
+                f"L'attivita' con piu' ricavi non e' quella che hai indicato come "
+                f"principale ma {prevalente.professione.nome} "
+                f"({prevalente.ricavi:,.0f} euro). L'inquadramento previdenziale segue "
+                "la prevalente: verifica quale codice ATECO hai dichiarato come primario.",
+                "art. 1 c. 54 L. 190/2014",
+            ))
+
+        nature = {a.e_impresa for a in attive}
+        if len(nature) > 1:
+            contributi_doppia = _contributi_doppia_iscrizione(attive, profilo, riduzione)
+            differenza = contributi_doppia - esito.contributi_dovuti
+            verifiche.append(Verifica(
+                "Attivita' di natura diversa",
+                ATTENZIONE,
+                "Stai cumulando un'attivita' professionale e una d'impresa. INPS puo' "
+                "richiedere l'iscrizione a entrambe le gestioni, ciascuna sul proprio "
+                f"reddito: in quel caso i contributi salgono a {contributi_doppia:,.0f} "
+                f"euro ({differenza:+,.0f} rispetto ai {esito.contributi_dovuti:,.0f} "
+                "calcolati sulla sola gestione prevalente). E' una situazione da "
+                "impostare con un professionista prima di aprire la posizione.",
+                "art. 1 c. 208 L. 662/1996",
             ))
 
     profilo_scadenze = scadenze.Profilo(
@@ -536,4 +713,7 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
         avvisi=tuple(dict.fromkeys(avvisi)),
         inquadramento_da_scegliere=scelta_pendente,
         costo_inquadramento=costo_inquadramento,
+        attivita=attivita,
+        coefficiente_medio=round(coefficiente, 6),
+        contributi_doppia_iscrizione=contributi_doppia,
     )

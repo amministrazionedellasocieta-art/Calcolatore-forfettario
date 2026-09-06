@@ -41,6 +41,14 @@ ordinario è calcolato con la detrazione per redditi di lavoro autonomo
 (art. 13 c. 5 TUIR): ignorarla sposterebbe il pareggio di circa due punti e
 sempre nella stessa direzione.
 
+**Più attività nella stessa partita IVA** — il caso normale per chi lavora
+online: sponsorizzazioni al 78% e ricavi pubblicitari al 67%, oppure uno shop
+al 40% e consulenza al 78%. Ogni attività usa il proprio coefficiente
+(art. 1 c. 64 L. 190/2014), il limite degli 85.000 € si misura sulla somma dei
+ricavi (art. 1 c. 54), e la cassa previdenziale segue l'attività prevalente per
+ricavi. Quando si cumulano un'attività professionale e una d'impresa lo
+strumento stima anche quanto costerebbe la doppia iscrizione INPS.
+
 **L'inquadramento non lo indovina** — per i lavori che possono essere
 professionali o d'impresa (streamer, videomaker, affiliate marketer, coach) la
 cassa previdenziale non si deduce dal fatturato: dipende da come è organizzata
@@ -68,6 +76,7 @@ Da riga di comando, senza browser:
 python3 -m fiscodigitale --elenco
 python3 -m fiscodigitale --cerca twitch
 python3 -m fiscodigitale --professione dropshipping --ricavi 60000 --costi 35000 --esteri 4000
+python3 -m fiscodigitale --professione influencer --ricavi 30000 --altra youtuber:15000 --natura impresa
 ```
 
 Come libreria:
@@ -77,14 +86,16 @@ from fiscodigitale import diagnosi
 
 esito = diagnosi.analizza(
     diagnosi.Profilo(
-        professione="streamer",
-        ricavi_attesi=45_000,
+        professione="influencer",
+        ricavi_attesi=30_000,
+        altre_attivita=(diagnosi.AltraAttivita("youtuber", 15_000),),
+        natura_attivita=diagnosi.IMPRESA,
         clienti_esteri_b2b=True,
         acquisti_servizi_esteri=3_000,
     )
 )
 print(esito.sintesi())
-print(esito.netto_reale)
+print(esito.coefficiente_medio, esito.netto_reale)
 ```
 
 ## Architettura
@@ -97,7 +108,7 @@ testabili in isolamento.
 | `parametri.py` | Tutti i valori 2026 in un solo posto, con le fonti. L'aggiornamento annuale tocca questo file |
 | `professioni.py` | Catalogo delle professioni digitali e ricerca per lavoro, piattaforma o codice |
 | `previdenza.py` | Gestione Separata e Artigiani/Commercianti, riduzioni contributive, ragguaglio mensile |
-| `forfettario.py` | Imposta sostitutiva, acconti, piano di cassa pluriennale, ricavi necessari per un netto obiettivo |
+| `forfettario.py` | Imposta sostitutiva, acconti, piano di cassa pluriennale, coefficiente medio di più attività, ricavi necessari per un netto obiettivo |
 | `ordinario.py` | IRPEF a scaglioni 2026, addizionali, contributi deducibili |
 | `confronto.py` | Confronto tra regimi e punto di pareggio dei costi |
 | `iva_estero.py` | Territorialità IVA, reverse charge, OSS, database delle piattaforme |
@@ -106,7 +117,7 @@ testabili in isolamento.
 | `diagnosi.py` | Orchestrazione: dal lavoro alla checklist completa |
 
 ```bash
-python3 -m unittest discover -s tests -v   # 85 test
+python3 -m unittest discover -s tests -v   # 104 test
 ```
 
 ## Dati e fonti
@@ -144,7 +155,10 @@ In particolare:
 - le addizionali regionali e comunali usano valori medi, non quelli del tuo
   Comune;
 - l'entità che paga una piattaforma può cambiare nel tempo: va sempre verificata
-  sul contratto o sull'estratto conto prima di impostare la fatturazione.
+  sul contratto o sull'estratto conto prima di impostare la fatturazione;
+- con attività di natura diversa nella stessa partita IVA i contributi sono
+  calcolati sulla gestione prevalente e la doppia iscrizione è mostrata come
+  stima: le regole INPS sulla prevalenza vanno verificate caso per caso.
 
 ## Da fare
 
@@ -152,7 +166,5 @@ In particolare:
 - casse professionali con i regolamenti reali al posto dei parametri indicativi;
 - import dei movimenti da CSV di banca e piattaforme;
 - calcolo delle plusvalenze su cripto-attività con il metodo LIFO;
-- attività multiple: chi incassa da sponsorizzazioni (78%) e da AdSense (67%)
-  oggi deve sceglierne una sola;
 - rimozione o implementazione dei parametri dichiarati e non ancora usati
   (casse professionali, diritti d'autore, ritenuta d'acconto, IRAP).
