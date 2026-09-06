@@ -6,6 +6,8 @@ from datetime import date
 from fiscodigitale import (
     confronto,
     contabilita,
+    cripto,
+    formato,
     diagnosi,
     forfettario,
     iva_estero,
@@ -379,6 +381,16 @@ class TestIvaEstero(unittest.TestCase):
         _, esito = iva_estero.analizza_piattaforma("google-ads")
         self.assertIn("TD17", esito.documento)
 
+    def test_natura_ha_una_descrizione(self):
+        e = iva_estero.analizza(iva_estero.Operazione(area=iva_estero.UE))
+        self.assertIn("7-septies", e.natura_descrizione)
+
+    def test_natura_assente_non_rompe(self):
+        e = iva_estero.analizza(iva_estero.Operazione(
+            direzione=iva_estero.ACQUISTO, area=iva_estero.UE
+        ))
+        self.assertEqual(e.natura_descrizione, "")
+
     def test_iva_reverse_charge(self):
         self.assertAlmostEqual(iva_estero.iva_reverse_charge(1_000), 220.0, places=2)
 
@@ -544,6 +556,15 @@ class TestDiagnosi(unittest.TestCase):
             self.assertFalse(d.inquadramento_da_scegliere, slug)
             self.assertIsNone(d.costo_inquadramento, slug)
 
+    def test_ricavi_bassi_suggeriscono_la_prestazione_occasionale(self):
+        d = diagnosi.analizza(diagnosi.Profilo(professione="copywriter", ricavi_attesi=3_000))
+        self.assertTrue(any("partita IVA" in v.nome for v in d.verifiche))
+
+    def test_investitore_cripto_avvisato_che_non_e_impresa(self):
+        d = diagnosi.analizza(diagnosi.Profilo(professione="trader-cripto", ricavi_attesi=20_000))
+        avviso = next(v for v in d.verifiche if "partita IVA" in v.nome)
+        self.assertIn("33%", avviso.messaggio)
+
     def test_ecommerce_va_in_gestione_commercianti(self):
         d = diagnosi.analizza(diagnosi.Profilo(professione="ecommerce", ricavi_attesi=60_000))
         self.assertEqual(d.gestione, previdenza.COMMERCIANTI)
@@ -568,6 +589,81 @@ class TestDiagnosi(unittest.TestCase):
             )
             self.assertTrue(d.sintesi())
             self.assertGreaterEqual(d.esito_forfettario.totale_dovuto, 0)
+
+
+class TestFormato(unittest.TestCase):
+    def test_migliaia_e_decimali_all_italiana(self):
+        self.assertEqual(formato.numero(7_860.11, 2), "7.860,11")
+        self.assertEqual(formato.numero(122_295), "122.295")
+
+    def test_numeri_piccoli_e_negativi(self):
+        self.assertEqual(formato.numero(0), "0")
+        self.assertEqual(formato.numero(-1_234.5, 2), "-1.234,50")
+
+    def test_euro_e_percentuale(self):
+        self.assertEqual(formato.euro(1_000), "1.000 euro")
+        self.assertEqual(formato.percentuale(0.2607), "26,1%")
+        self.assertEqual(formato.percentuale(0.15, 0), "15%")
+
+    def test_messaggi_del_motore_non_usano_il_formato_inglese(self):
+        # Regressione: i messaggi mostravano "7,860 euro" invece di "7.860 euro".
+        d = diagnosi.analizza(diagnosi.Profilo(professione="ecommerce", ricavi_attesi=45_000))
+        testo = " ".join([v.messaggio for v in d.verifiche] + list(d.avvisi))
+        self.assertNotRegex(testo, r"\d,\d{3}")
+
+
+class TestCripto(unittest.TestCase):
+    def test_aliquota_ordinaria(self):
+        e = cripto.calcola(10_000)
+        self.assertAlmostEqual(e.imposta, 3_300.0, places=2)
+
+    def test_moneta_elettronica_micar(self):
+        e = cripto.calcola(10_000, moneta_elettronica=True)
+        self.assertAlmostEqual(e.imposta, 2_600.0, places=2)
+
+    def test_imposta_sul_valore(self):
+        e = cripto.calcola(0, giacenza_media=50_000)
+        self.assertAlmostEqual(e.imposta_valore, 100.0, places=2)
+        self.assertAlmostEqual(e.totale_dovuto, 100.0, places=2)
+
+    def test_nessuna_soglia_di_esenzione(self):
+        self.assertGreater(cripto.calcola(50).imposta, 0)
+
+    def test_minusvalenza_non_genera_imposta(self):
+        self.assertEqual(cripto.calcola(-5_000).imposta, 0.0)
+
+
+class TestDirittiAutore(unittest.TestCase):
+    def test_abbattimento_ordinario(self):
+        self.assertAlmostEqual(ordinario.reddito_diritti_autore(10_000), 7_500.0, places=2)
+
+    def test_abbattimento_maggiorato_under_35(self):
+        self.assertAlmostEqual(ordinario.reddito_diritti_autore(10_000, 30), 6_000.0, places=2)
+
+    def test_a_35_anni_torna_ordinario(self):
+        self.assertAlmostEqual(ordinario.reddito_diritti_autore(10_000, 35), 7_500.0, places=2)
+
+
+class TestCostantiVive(unittest.TestCase):
+    """Guard contro il ritorno di parametri dichiarati e mai usati."""
+
+    def test_nessuna_costante_orfana(self):
+        import pathlib
+        import re
+
+        radice = pathlib.Path(P.__file__).parent
+        nomi = {
+            n for n in dir(P)
+            if n.isupper() and not n.startswith("_")
+        }
+        altrove = "\n".join(
+            f.read_text()
+            for f in radice.glob("*.py")
+            if f.name != "parametri.py"
+        )
+        altrove += (radice.parent / "app_streamlit.py").read_text()
+        orfane = {n for n in nomi if not re.search(rf"\b{n}\b", altrove)}
+        self.assertEqual(orfane, set(), f"costanti dichiarate e mai usate: {sorted(orfane)}")
 
 
 class TestMultiAttivita(unittest.TestCase):

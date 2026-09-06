@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import date
 
+from . import formato
 from . import confronto, forfettario, iva_estero
 from . import parametri as P
 from . import previdenza, professioni, scadenze
@@ -214,10 +215,10 @@ class Diagnosi:
             )
         return (
             f"{intestazione} "
-            f"Su {self.ricavi_totali:,.0f} euro di ricavi versi "
-            f"{self.esito_forfettario.totale_dovuto:,.0f} euro tra imposta e contributi "
+            f"Su {formato.numero(self.ricavi_totali, 0)} euro di ricavi versi "
+            f"{formato.numero(self.esito_forfettario.totale_dovuto, 0)} euro tra imposta e contributi "
             f"({self.esito_forfettario.pressione_effettiva * 100:.1f}%) e ne restano "
-            f"{self.netto_reale:,.0f} netti."
+            f"{formato.numero(self.netto_reale, 0)} netti."
         )
 
 
@@ -339,39 +340,51 @@ def _verifiche(profilo: Profilo, prof: professioni.Professione) -> tuple[Verific
     if ricavi > P.SOGLIA_USCITA_IMMEDIATA:
         v.append(Verifica(
             "Limite dei ricavi", BLOCCANTE,
-            f"Ricavi previsti di {ricavi:,.0f} euro: oltre "
-            f"{P.SOGLIA_USCITA_IMMEDIATA:,.0f} euro il regime decade nell'anno stesso.",
+            f"Ricavi previsti di {formato.numero(ricavi, 0)} euro: oltre "
+            f"{formato.numero(P.SOGLIA_USCITA_IMMEDIATA, 0)} euro il regime decade nell'anno stesso.",
             "art. 1 c. 71 L. 190/2014",
         ))
     elif ricavi > soglia_ragguagliata:
         v.append(Verifica(
             "Limite dei ricavi", ATTENZIONE,
-            f"Ricavi previsti di {ricavi:,.0f} euro contro un limite di "
-            f"{soglia_ragguagliata:,.0f}: userai il forfettario quest'anno e passerai "
+            f"Ricavi previsti di {formato.numero(ricavi, 0)} euro contro un limite di "
+            f"{formato.numero(soglia_ragguagliata, 0)}: userai il forfettario quest'anno e passerai "
             "all'ordinario dal prossimo.",
             "art. 1 c. 54 L. 190/2014",
         ))
     else:
         v.append(Verifica(
             "Limite dei ricavi", OK,
-            f"{ricavi:,.0f} euro su un limite di {soglia_ragguagliata:,.0f}: "
-            f"hai ancora {soglia_ragguagliata - ricavi:,.0f} euro di margine.",
+            f"{formato.numero(ricavi, 0)} euro su un limite di {formato.numero(soglia_ragguagliata, 0)}: "
+            f"hai ancora {formato.numero(soglia_ragguagliata - ricavi, 0)} euro di margine.",
+        ))
+
+    if 0 < ricavi <= P.SOGLIA_PRESTAZIONE_OCCASIONALE_INPS:
+        v.append(Verifica(
+            "Serve davvero la partita IVA?", ATTENZIONE,
+            f"Con {formato.euro(ricavi)} di ricavi previsti valuta prima se l'attivita' "
+            "e' occasionale: in quel caso basta la ricevuta per prestazione occasionale, "
+            f"e sotto {formato.euro(P.SOGLIA_PRESTAZIONE_OCCASIONALE_INPS)} l'anno non e' "
+            "dovuta nemmeno l'iscrizione alla Gestione Separata. Attenzione pero': la "
+            "soglia riguarda i contributi, non l'obbligo di partita IVA, che dipende "
+            "dall'abitualita' dell'attivita' e non dall'importo.",
+            "art. 44 c. 2 DL 269/2003; art. 5 DPR 633/72",
         ))
 
     if profilo.redditi_dipendente_anno_precedente > P.SOGLIA_REDDITI_DIPENDENTE:
         v.append(Verifica(
             "Redditi da lavoro dipendente", BLOCCANTE,
             f"Nell'anno precedente hai percepito "
-            f"{profilo.redditi_dipendente_anno_precedente:,.0f} euro da lavoro dipendente "
-            f"o pensione, oltre il limite di {P.SOGLIA_REDDITI_DIPENDENTE:,.0f}. "
+            f"{formato.numero(profilo.redditi_dipendente_anno_precedente, 0)} euro da lavoro dipendente "
+            f"o pensione, oltre il limite di {formato.numero(P.SOGLIA_REDDITI_DIPENDENTE, 0)}. "
             "Il limite non opera se il rapporto di lavoro e' cessato.",
             "art. 1 c. 57 lett. d-ter L. 190/2014",
         ))
     elif profilo.redditi_dipendente_anno_precedente > 0:
         v.append(Verifica(
             "Redditi da lavoro dipendente", OK,
-            f"{profilo.redditi_dipendente_anno_precedente:,.0f} euro sotto il limite di "
-            f"{P.SOGLIA_REDDITI_DIPENDENTE:,.0f} euro: puoi cumulare lavoro dipendente e "
+            f"{formato.numero(profilo.redditi_dipendente_anno_precedente, 0)} euro sotto il limite di "
+            f"{formato.numero(P.SOGLIA_REDDITI_DIPENDENTE, 0)} euro: puoi cumulare lavoro dipendente e "
             "partita IVA forfettaria.",
         ))
 
@@ -394,8 +407,8 @@ def _verifiche(profilo: Profilo, prof: professioni.Professione) -> tuple[Verific
     if profilo.spese_personale > P.LIMITE_SPESE_PERSONALE:
         v.append(Verifica(
             "Spese per il personale", BLOCCANTE,
-            f"{profilo.spese_personale:,.0f} euro di costi per dipendenti e "
-            f"collaboratori, oltre il limite di {P.LIMITE_SPESE_PERSONALE:,.0f}.",
+            f"{formato.numero(profilo.spese_personale, 0)} euro di costi per dipendenti e "
+            f"collaboratori, oltre il limite di {formato.numero(P.LIMITE_SPESE_PERSONALE, 0)}.",
             "art. 1 c. 54 lett. b L. 190/2014",
         ))
 
@@ -450,7 +463,7 @@ def _adempimenti(profilo: Profilo, prof: professioni.Professione, gestione: str)
         lista.append(Adempimento(
             "Iscrizione alla Gestione Artigiani o Commercianti",
             "Comporta contributi fissi trimestrali dovuti anche a reddito zero "
-            f"(circa {P.COMMERCIANTI['contributo_fisso']:,.0f} euro l'anno). "
+            f"(circa {formato.numero(P.COMMERCIANTI['contributo_fisso'], 0)} euro l'anno). "
             "Chiedi la riduzione del 35% entro il 28 febbraio.",
             "Contestuale all'apertura",
         ))
@@ -491,19 +504,19 @@ def _adempimenti(profilo: Profilo, prof: professioni.Professione, gestione: str)
         iva_annua = iva_estero.iva_reverse_charge(profilo.acquisti_servizi_esteri)
         lista.append(Adempimento(
             "Inversione contabile sugli acquisti esteri",
-            f"Su {profilo.acquisti_servizi_esteri:,.0f} euro di servizi esteri (pubblicita', "
+            f"Su {formato.numero(profilo.acquisti_servizi_esteri, 0)} euro di servizi esteri (pubblicita', "
             f"software, commissioni) devi integrare le fatture e versare "
-            f"{iva_annua:,.0f} euro di IVA che nel forfettario non recuperi.",
+            f"{formato.numero(iva_annua, 0)} euro di IVA che nel forfettario non recuperi.",
             f"TD17 entro il {P.GIORNO_AUTOFATTURA_ACQUISTI} e F24 entro il "
             f"{P.GIORNO_VERSAMENTO_IVA_REVERSE} del mese successivo",
-            costo_indicativo=f"{iva_annua:,.0f} euro l'anno di IVA indetraibile",
+            costo_indicativo=f"{formato.numero(iva_annua, 0)} euro l'anno di IVA indetraibile",
         ))
 
     if profilo.vendite_privati_ue > P.SOGLIA_OSS:
         lista.append(Adempimento(
             "Valutazione del regime OSS",
-            f"Le vendite a privati UE ({profilo.vendite_privati_ue:,.0f} euro) superano "
-            f"la soglia di {P.SOGLIA_OSS:,.0f} euro: si applica l'IVA del Paese del "
+            f"Le vendite a privati UE ({formato.numero(profilo.vendite_privati_ue, 0)} euro) superano "
+            f"la soglia di {formato.numero(P.SOGLIA_OSS, 0)} euro: si applica l'IVA del Paese del "
             "cliente. Per un forfettario e' un passaggio da impostare con un professionista.",
             "Prima di superare la soglia",
         ))
@@ -617,23 +630,37 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
             if abs(delta) < 1:
                 verso = "Con i tuoi numeri le due forme costano quasi uguale"
             elif delta > 0:
-                verso = f"Con i tuoi numeri la forma d'impresa costa {delta:,.0f} euro in piu'"
+                verso = f"Con i tuoi numeri la forma d'impresa costa {formato.numero(delta, 0)} euro in piu'"
             else:
-                verso = f"Con i tuoi numeri la forma d'impresa costa {abs(delta):,.0f} euro in meno"
+                verso = f"Con i tuoi numeri la forma d'impresa costa {formato.numero(abs(delta), 0)} euro in meno"
             verifiche.append(Verifica(
                 "Inquadramento da confermare",
                 ATTENZIONE,
                 "Questo lavoro puo' essere esercitato in forma professionale o "
                 "d'impresa, e non lo decide il fatturato: dipende da quanto pesano "
                 "l'organizzazione e i mezzi rispetto al tuo apporto personale. "
-                f"{verso}: {costo_inquadramento['professionale']:,.0f} euro in Gestione "
-                f"Separata contro {costo_inquadramento['impresa']:,.0f} come impresa. "
+                f"{verso}: {formato.numero(costo_inquadramento['professionale'], 0)} euro in Gestione "
+                f"Separata contro {formato.numero(costo_inquadramento['impresa'], 0)} come impresa. "
                 "Attenzione pero' al profilo di rischio: la quota fissa dell'impresa e' "
                 "dovuta anche in un anno senza incassi, la Gestione Separata no. "
                 "Il calcolo assume la forma professionale: indica come lavori per "
                 "avere i numeri giusti.",
                 "art. 2195 c.c.; art. 53 TUIR",
             ))
+
+    if not prof.ateco:
+        aliquota = P.CRIPTO["aliquota_plusvalenze"]
+        verifiche.append(Verifica(
+            "Non e' un'attivita' con partita IVA", ATTENZIONE,
+            "Chi investe in proprio non esercita un'attivita' d'impresa: le "
+            f"plusvalenze sono redditi diversi tassati al "
+            f"{formato.percentuale(aliquota, 0)} con imposta sostitutiva, piu' "
+            f"l'imposta sul valore delle cripto-attivita' del "
+            f"{P.CRIPTO['imposta_valore_cripto'] * 1000:.0f} per mille. I numeri del "
+            "forfettario qui sotto non ti riguardano: usa il modulo dedicato alle "
+            "cripto-attivita'.",
+            P.FONTI["cripto"],
+        ))
 
     contributi_doppia = None
     if profilo.multi_attivita:
@@ -644,7 +671,7 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
                 ATTENZIONE,
                 f"L'attivita' con piu' ricavi non e' quella che hai indicato come "
                 f"principale ma {prevalente.professione.nome} "
-                f"({prevalente.ricavi:,.0f} euro). L'inquadramento previdenziale segue "
+                f"({formato.numero(prevalente.ricavi, 0)} euro). L'inquadramento previdenziale segue "
                 "la prevalente: verifica quale codice ATECO hai dichiarato come primario.",
                 "art. 1 c. 54 L. 190/2014",
             ))
@@ -658,8 +685,8 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
                 ATTENZIONE,
                 "Stai cumulando un'attivita' professionale e una d'impresa. INPS puo' "
                 "richiedere l'iscrizione a entrambe le gestioni, ciascuna sul proprio "
-                f"reddito: in quel caso i contributi salgono a {contributi_doppia:,.0f} "
-                f"euro ({differenza:+,.0f} rispetto ai {esito.contributi_dovuti:,.0f} "
+                f"reddito: in quel caso i contributi salgono a {formato.numero(contributi_doppia, 0)} "
+                f"euro ({differenza:+,.0f} rispetto ai {formato.numero(esito.contributi_dovuti, 0)} "
                 "calcolati sulla sola gestione prevalente). E' una situazione da "
                 "impostare con un professionista prima di aprire la posizione.",
                 "art. 1 c. 208 L. 662/1996",
@@ -679,14 +706,14 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
 
     if raffronto.conviene == "ordinario":
         avvisi.append(
-            f"Con {profilo.costi_annui:,.0f} euro di costi reali il regime ordinario ti "
-            f"lascia {abs(raffronto.differenza):,.0f} euro in piu' all'anno: il "
+            f"Con {formato.numero(profilo.costi_annui, 0)} euro di costi reali il regime ordinario ti "
+            f"lascia {formato.numero(abs(raffronto.differenza), 0)} euro in piu' all'anno: il "
             "forfettario non e' la scelta automatica."
         )
     if profilo.acquisti_servizi_esteri > 0:
         avvisi.append(
             f"L'IVA sugli acquisti esteri ti costa "
-            f"{iva_estero.iva_reverse_charge(profilo.acquisti_servizi_esteri):,.0f} euro "
+            f"{formato.numero(iva_estero.iva_reverse_charge(profilo.acquisti_servizi_esteri), 0)} euro "
             "l'anno che non recuperi: e' un costo tipico del digitale che il "
             "forfettario non considera."
         )
@@ -694,8 +721,8 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
         salto = piano[1].uscite_cassa - piano[0].uscite_cassa
         if salto > 0:
             avvisi.append(
-                f"Nel secondo anno le uscite passano da {piano[0].uscite_cassa:,.0f} a "
-                f"{piano[1].uscite_cassa:,.0f} euro ({salto:,.0f} euro in piu'): "
+                f"Nel secondo anno le uscite passano da {formato.numero(piano[0].uscite_cassa, 0)} a "
+                f"{formato.numero(piano[1].uscite_cassa, 0)} euro ({formato.numero(salto, 0)} euro in piu'): "
                 "e' l'effetto di saldo e acconti che arrivano insieme."
             )
 

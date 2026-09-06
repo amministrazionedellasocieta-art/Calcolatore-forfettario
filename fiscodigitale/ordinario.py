@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from . import formato
 from . import parametri as P
 from . import previdenza
 
@@ -124,6 +125,23 @@ def detrazione_lavoro_autonomo(reddito_complessivo: float) -> float:
     return 0.0
 
 
+def reddito_diritti_autore(compenso: float, eta: int | None = None) -> float:
+    """Imponibile dei diritti d'autore percepiti dall'autore stesso.
+
+    Non e' reddito forfettario ne' d'impresa: e' lavoro autonomo con
+    abbattimento forfetario delle spese (art. 53 c. 2 lett. b TUIR), piu'
+    generoso per gli under 35. Riguarda musicisti, autori self-publishing,
+    fotografi e illustratori del catalogo.
+    """
+    compenso = max(0.0, compenso)
+    abbattimento = (
+        P.ABBATTIMENTO_DIRITTO_AUTORE_UNDER35
+        if eta is not None and eta < P.ETA_ABBATTIMENTO_MAGGIORE
+        else P.SOGLIA_DIRITTO_AUTORE_ABBATTIMENTO
+    )
+    return round(compenso * (1 - abbattimento), 2)
+
+
 def aliquota_marginale(imponibile: float) -> float:
     for limite, aliquota in P.SCAGLIONI_IRPEF:
         if imponibile <= limite:
@@ -165,7 +183,7 @@ def calcola(situazione: SituazioneOrdinario) -> EsitoOrdinario:
 
     note = [
         f"Detrazione per redditi di lavoro autonomo applicata: "
-        f"{detrazione_effettiva:,.2f} euro (art. 13 c. 5 TUIR).",
+        f"{formato.numero(detrazione_effettiva, 2)} euro (art. 13 c. 5 TUIR).",
         "Non sono incluse detrazioni personali, familiari a carico e oneri "
         "detraibili, che riducono ulteriormente il dovuto.",
         "L'IVA non e' un costo: la incassi dal cliente e la riversi allo Stato, "
@@ -179,7 +197,7 @@ def calcola(situazione: SituazioneOrdinario) -> EsitoOrdinario:
 
     if detrazione > detrazione_effettiva:
         note.append(
-            f"Detrazione non utilizzata per incapienza: {detrazione - detrazione_effettiva:,.2f} "
+            f"Detrazione non utilizzata per incapienza: {formato.numero(detrazione - detrazione_effettiva, 2)} "
             "euro non recuperabili, perche' la detrazione non genera credito."
         )
     if imposta_netta <= 0 and imponibile > 0:

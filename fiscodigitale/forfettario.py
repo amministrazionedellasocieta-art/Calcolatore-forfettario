@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
+from . import formato
 from . import parametri as P
 from . import previdenza
 
@@ -168,24 +169,24 @@ def calcola(situazione: Situazione) -> Esito:
 
     if s.ricavi > P.SOGLIA_USCITA_IMMEDIATA:
         avvisi.append(
-            f"Ricavi oltre {P.SOGLIA_USCITA_IMMEDIATA:,.0f} euro: il regime decade "
+            f"Ricavi oltre {formato.numero(P.SOGLIA_USCITA_IMMEDIATA, 0)} euro: il regime decade "
             "immediatamente, con IVA dovuta gia' su tutte le operazioni dell'anno."
         )
     elif s.ricavi > P.SOGLIA_RICAVI:
         avvisi.append(
-            f"Ricavi oltre {P.SOGLIA_RICAVI:,.0f} euro: resti in forfettario per "
+            f"Ricavi oltre {formato.numero(P.SOGLIA_RICAVI, 0)} euro: resti in forfettario per "
             "quest'anno ma dal prossimo passi al regime ordinario."
         )
     elif s.ricavi > P.SOGLIA_RICAVI * 0.9:
         avvisi.append(
-            f"Sei oltre il 90% della soglia ({P.SOGLIA_RICAVI:,.0f} euro): valuta se "
+            f"Sei oltre il 90% della soglia ({formato.numero(P.SOGLIA_RICAVI, 0)} euro): valuta se "
             "spostare gli incassi di fine anno o preparare il passaggio all'ordinario."
         )
 
     if dedotti > reddito_forfetario:
         note.append(
-            f"Contributi versati per {dedotti:,.2f} euro superiori al reddito "
-            f"forfetario: {dedotti - reddito_forfetario:,.2f} euro restano deducibili "
+            f"Contributi versati per {formato.numero(dedotti, 2)} euro superiori al reddito "
+            f"forfetario: {formato.numero(dedotti - reddito_forfetario, 2)} euro restano deducibili "
             "dagli altri redditi in dichiarazione."
         )
     if s.contributi_versati is None:
@@ -202,8 +203,8 @@ def calcola(situazione: Situazione) -> Esito:
     if s.mesi_attivita != 12:
         note.append(
             f"Attivita' per {s.mesi_attivita} mesi: la soglia degli "
-            f"{P.SOGLIA_RICAVI:,.0f} euro va ragguagliata ad anno "
-            f"({P.SOGLIA_RICAVI * s.mesi_attivita / 12:,.0f} euro nel tuo caso)."
+            f"{formato.numero(P.SOGLIA_RICAVI, 0)} euro va ragguagliata ad anno "
+            f"({formato.numero(P.SOGLIA_RICAVI * s.mesi_attivita / 12, 0)} euro nel tuo caso)."
         )
 
     return Esito(
@@ -356,16 +357,16 @@ def piano_cassa(
         if indice == 0:
             dettaglio.append("Primo anno: nessun saldo e nessun acconto d'imposta da versare.")
         else:
-            dettaglio.append(f"Saldo imposta anno precedente: {saldo_imposta:,.2f} euro.")
-            dettaglio.append(f"Acconti imposta dell'anno: {acconto_imposta:,.2f} euro.")
+            dettaglio.append(f"Saldo imposta anno precedente: {formato.numero(saldo_imposta, 2)} euro.")
+            dettaglio.append(f"Acconti imposta dell'anno: {formato.numero(acconto_imposta, 2)} euro.")
         if gestione_impresa:
             dettaglio.append(
-                f"Quota fissa INPS in quattro rate: {competenza.quota_fissa:,.2f} euro."
+                f"Quota fissa INPS in quattro rate: {formato.numero(competenza.quota_fissa, 2)} euro."
             )
         if contributi_cassa - (competenza.quota_fissa if gestione_impresa else 0.0) > 0:
             dettaglio.append(
                 f"Saldo e acconti contributivi: "
-                f"{contributi_cassa - (competenza.quota_fissa if gestione_impresa else 0.0):,.2f} euro."
+                f"{formato.numero(contributi_cassa - (competenza.quota_fissa if gestione_impresa else 0.0), 2)} euro."
             )
         elif indice == 0 and not gestione_impresa:
             dettaglio.append(

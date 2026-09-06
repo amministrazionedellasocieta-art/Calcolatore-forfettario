@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from . import formato
 from . import forfettario, ordinario, previdenza
 
 
@@ -48,12 +49,12 @@ class Confronto:
             return "I due regimi si equivalgono con questi numeri."
         vincitore = "forfettario" if self.conviene == "forfettario" else "regime ordinario"
         testo = (
-            f"Con {self.costi:,.0f} euro di costi reali conviene il {vincitore}: "
-            f"{abs(self.differenza):,.0f} euro di differenza netta all'anno."
+            f"Con {formato.numero(self.costi, 0)} euro di costi reali conviene il {vincitore}: "
+            f"{formato.numero(abs(self.differenza), 0)} euro di differenza netta all'anno."
         )
         if self.costi_di_pareggio:
             testo += (
-                f" Il pareggio e' a {self.costi_di_pareggio:,.0f} euro di costi "
+                f" Il pareggio e' a {formato.numero(self.costi_di_pareggio, 0)} euro di costi "
                 f"({(self.quota_costi_di_pareggio or 0) * 100:.0f}% dei ricavi)."
             )
         return testo

@@ -16,7 +16,9 @@ Esempio:
 from . import (  # noqa: F401
     confronto,
     contabilita,
+    cripto,
     diagnosi,
+    formato,
     forfettario,
     iva_estero,
     ordinario,
@@ -32,7 +34,9 @@ ANNO_IMPOSTA = parametri.ANNO_IMPOSTA
 __all__ = [
     "confronto",
     "contabilita",
+    "cripto",
     "diagnosi",
+    "formato",
     "forfettario",
     "iva_estero",
     "ordinario",

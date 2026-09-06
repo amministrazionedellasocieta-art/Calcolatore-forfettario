@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from . import formato
 from . import forfettario, iva_estero
 from . import parametri as P
 
@@ -161,8 +162,8 @@ class Registro:
                 nome="Permanenza nel forfettario",
                 valore_corrente=self.incassi,
                 limite=P.SOGLIA_RICAVI,
-                descrizione=f"Incassi dell'anno rispetto al limite di {P.SOGLIA_RICAVI:,.0f} euro "
-                            f"(proiezione a fine anno: {proiezione:,.0f} euro).",
+                descrizione=f"Incassi dell'anno rispetto al limite di {formato.numero(P.SOGLIA_RICAVI, 0)} euro "
+                            f"(proiezione a fine anno: {formato.numero(proiezione, 0)} euro).",
                 conseguenza="Superandola resti in forfettario quest'anno ma passi "
                             "all'ordinario dal prossimo.",
             ),
@@ -207,18 +208,18 @@ class Registro:
                 messaggi.append(f"[SUPERATA] {soglia.nome}: {soglia.conseguenza}")
             elif soglia.stato == "critica":
                 messaggi.append(
-                    f"[CRITICA] {soglia.nome}: mancano {soglia.residuo:,.0f} euro al limite."
+                    f"[CRITICA] {soglia.nome}: mancano {formato.numero(soglia.residuo, 0)} euro al limite."
                 )
         proiezione = self.proiezione_annuale(al)
         if proiezione > P.SOGLIA_RICAVI >= self.incassi:
             messaggi.append(
-                f"[PROIEZIONE] Con questo ritmo chiuderai a {proiezione:,.0f} euro e "
-                f"superarai il limite di {P.SOGLIA_RICAVI:,.0f}: valuta ora come gestire "
+                f"[PROIEZIONE] Con questo ritmo chiuderai a {formato.numero(proiezione, 0)} euro e "
+                f"superarai il limite di {formato.numero(P.SOGLIA_RICAVI, 0)}: valuta ora come gestire "
                 "gli incassi di fine anno."
             )
         if self.iva_reverse_charge_maturata > 0:
             messaggi.append(
-                f"[IVA] Hai maturato {self.iva_reverse_charge_maturata:,.2f} euro di IVA "
+                f"[IVA] Hai maturato {formato.numero(self.iva_reverse_charge_maturata, 2)} euro di IVA "
                 "su acquisti esteri da versare con F24."
             )
         return tuple(messaggi)

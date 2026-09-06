@@ -114,11 +114,22 @@ testabili in isolamento.
 | `iva_estero.py` | Territorialità IVA, reverse charge, OSS, database delle piattaforme |
 | `contabilita.py` | Registro di cassa, soglie, proiezioni, accantonamento |
 | `scadenze.py` | Scadenzario personalizzato, con spostamento delle date festive |
+| `cripto.py` | Plusvalenze e imposta sul valore delle cripto-attività detenute a titolo personale |
+| `formato.py` | Formattazione dei numeri all'italiana, condivisa da motore e interfaccia |
 | `diagnosi.py` | Orchestrazione: dal lavoro alla checklist completa |
 
 ```bash
-python3 -m unittest discover -s tests -v   # 104 test
+python3 -m unittest discover -s tests -v   # 126 test
 ```
+
+I test del motore girano senza dipendenze: i cinque smoke test dell'interfaccia
+si saltano da soli dove Streamlit non è installato. La CI di GitHub Actions
+esegue il motore su Python 3.11 e 3.12 e l'app su 3.11 con le dipendenze
+installate.
+
+Un test di guardia (`TestCostantiVive`) fallisce se in `parametri.py` compare
+una costante che nessun modulo usa: serve a non far tornare parametri
+dichiarati e mai collegati, che promettono funzionalità inesistenti.
 
 ## Dati e fonti
 
@@ -165,6 +176,8 @@ In particolare:
 - coefficienti aggiornati quando uscirà la tabella riscritta su ATECO 2025;
 - casse professionali con i regolamenti reali al posto dei parametri indicativi;
 - import dei movimenti da CSV di banca e piattaforme;
-- calcolo delle plusvalenze su cripto-attività con il metodo LIFO;
-- rimozione o implementazione dei parametri dichiarati e non ancora usati
-  (casse professionali, diritti d'autore, ritenuta d'acconto, IRAP).
+- calcolo delle plusvalenze su cripto-attività con il metodo LIFO (oggi
+  `cripto.py` calcola l'imposta su una plusvalenza già determinata);
+- collegamento del modulo cripto alla diagnosi, oggi solo segnalata a chi
+  investe in proprio;
+- casse professionali, quando il catalogo includerà professioni ordinistiche.

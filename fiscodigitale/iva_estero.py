@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from . import formato
 from . import parametri as P
 
 # Direzione dell'operazione
@@ -58,6 +59,11 @@ class EsitoIva:
     scadenze: tuple[str, ...] = ()
     rischi: tuple[str, ...] = ()
 
+    @property
+    def natura_descrizione(self) -> str:
+        """Testo esteso del codice natura da riportare in fattura elettronica."""
+        return P.NATURE_IVA.get(self.natura, "")
+
 
 def _vendita(op: Operazione) -> EsitoIva:
     forfe = op.regime == FORFETTARIO
@@ -76,9 +82,14 @@ def _vendita(op: Operazione) -> EsitoIva:
                     "Fattura elettronica obbligatoria anche per i forfettari.",
                     f"Imposta di bollo da {P.IMPOSTA_BOLLO:.2f} euro sulle fatture "
                     f"oltre {P.SOGLIA_BOLLO:.2f} euro (assolta in modo virtuale).",
-                    "Non subisci ritenuta d'acconto: inserisci la dicitura che la esclude.",
+                    "Non subisci la ritenuta d'acconto del "
+                    f"{P.RITENUTA_ACCONTO_ORDINARIA * 100:.0f}%: inserisci in fattura "
+                    "la dicitura che la esclude.",
                 ),
-                scadenze=("Entro 12 giorni dall'effettuazione dell'operazione.",),
+                scadenze=(
+                    f"Entro {P.GIORNI_EMISSIONE_FATTURA} giorni dall'effettuazione "
+                    "dell'operazione.",
+                ),
             )
         return EsitoIva(
             titolo="Vendita in Italia (ordinario)",
@@ -131,7 +142,7 @@ def _vendita(op: Operazione) -> EsitoIva:
                     riferimento="art. 38-bis DL 331/93; regime OSS",
                     documento="Registrazione OSS e dichiarazione trimestrale",
                     adempimenti=(
-                        f"Superata la soglia unica di {P.SOGLIA_OSS:,.0f} euro annui: "
+                        f"Superata la soglia unica di {formato.numero(P.SOGLIA_OSS, 0)} euro annui: "
                         "registrati all'OSS o apri una posizione IVA in ogni Paese.",
                         "Applica l'aliquota del Paese di destinazione.",
                     ),
@@ -148,8 +159,8 @@ def _vendita(op: Operazione) -> EsitoIva:
                 documento="TD01 o corrispettivo",
                 adempimenti=(
                     f"Monitora il cumulo annuo: la soglia unica UE e' "
-                    f"{P.SOGLIA_OSS:,.0f} euro (attualmente a "
-                    f"{op.vendite_ue_b2c_anno:,.0f} euro).",
+                    f"{formato.numero(P.SOGLIA_OSS, 0)} euro (attualmente a "
+                    f"{formato.numero(op.vendite_ue_b2c_anno, 0)} euro).",
                 ),
             )
         return EsitoIva(
@@ -222,8 +233,8 @@ def _vendita(op: Operazione) -> EsitoIva:
                 riferimento="art. 7-octies DPR 633/72",
                 documento="TD01 o corrispettivo",
                 adempimenti=(
-                    f"Cumulo attuale {op.vendite_ue_b2c_anno:,.0f} euro su "
-                    f"{P.SOGLIA_OSS:,.0f}: oltre la soglia cambia tutto.",
+                    f"Cumulo attuale {formato.numero(op.vendite_ue_b2c_anno, 0)} euro su "
+                    f"{formato.numero(P.SOGLIA_OSS, 0)}: oltre la soglia cambia tutto.",
                 ),
             )
         return EsitoIva(
@@ -272,8 +283,8 @@ def _acquisto(op: Operazione) -> EsitoIva:
                 riferimento="art. 38 c. 5 lett. c DL 331/93",
                 documento="Fattura estera, nessuna integrazione",
                 adempimenti=(
-                    f"Finche' resti sotto {P.SOGLIA_OSS:,.0f} euro annui di acquisti "
-                    f"intracomunitari di beni (ora a {op.acquisti_beni_ue_anno:,.0f}) "
+                    f"Finche' resti sotto {formato.numero(P.SOGLIA_OSS, 0)} euro annui di acquisti "
+                    f"intracomunitari di beni (ora a {formato.numero(op.acquisti_beni_ue_anno, 0)}) "
                     "l'acquisto e' trattato come interno al Paese del fornitore.",
                 ),
                 rischi=(

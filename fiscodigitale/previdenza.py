@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from . import formato
 from . import parametri as P
 
 GESTIONE_SEPARATA = "gestione_separata"
@@ -73,12 +74,12 @@ def gestione_separata(
             int(12 * imponibile / P.GESTIONE_SEPARATA["minimale_accredito"]),
         ) if imponibile else 0
         note.append(
-            f"Reddito sotto il minimale di {P.GESTIONE_SEPARATA['minimale_accredito']:,.0f} euro: "
+            f"Reddito sotto il minimale di {formato.numero(P.GESTIONE_SEPARATA['minimale_accredito'], 0)} euro: "
             f"accrediti circa {mesi} mesi di contribuzione invece di 12."
         )
     if imponibile > P.GESTIONE_SEPARATA["massimale"]:
         note.append(
-            f"Reddito oltre il massimale di {P.GESTIONE_SEPARATA['massimale']:,.0f} euro: "
+            f"Reddito oltre il massimale di {formato.numero(P.GESTIONE_SEPARATA['massimale'], 0)} euro: "
             "l'eccedenza non e' soggetta a contribuzione."
         )
 
@@ -133,7 +134,7 @@ def artigiani_commercianti(
     )
 
     note: list[str] = [
-        f"Quota fissa dovuta anche a reddito zero: {fisso_pieno:,.2f} euro"
+        f"Quota fissa dovuta anche a reddito zero: {formato.numero(fisso_pieno, 2)} euro"
         + (f" (ragguagliata a {mesi_attivita} mesi)" if mesi_attivita != 12 else "")
         + ".",
     ]
@@ -166,7 +167,7 @@ def artigiani_commercianti(
         )
     if imponibile > massimale:
         note.append(
-            f"Reddito oltre il massimale di {massimale:,.0f} euro: l'eccedenza non e' contribuita."
+            f"Reddito oltre il massimale di {formato.numero(massimale, 0)} euro: l'eccedenza non e' contribuita."
         )
 
     totale_pieno = fisso_pieno + variabile_pieno
@@ -214,6 +215,8 @@ def riduzioni_disponibili(gestione: str, prima_iscrizione_2025: bool = False) ->
     """Riduzioni contributive effettivamente richiedibili nel 2026."""
     if gestione not in GESTIONI_IMPRESA:
         return (0,)
-    if prima_iscrizione_2025:
+    # La riduzione al 50% resta a chi si e' iscritto nel 2025; se una legge
+    # futura la riaprisse basterebbe alzare il flag nei parametri.
+    if prima_iscrizione_2025 or P.RIDUZIONE_50_APERTA_A_NUOVE_ISCRIZIONI:
         return (0, 35, 50)
     return (0, 35)

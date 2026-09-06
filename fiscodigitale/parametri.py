@@ -100,14 +100,9 @@ RIDUZIONE_35 = 0.35   # forfettari, domanda entro il 28 febbraio, su tutta la co
 RIDUZIONE_50 = 0.50   # prima iscrizione nel 2025, 36 mesi, solo sulla quota IVS
 RIDUZIONE_50_APERTA_A_NUOVE_ISCRIZIONI = False  # chiusa dal 01/01/2026
 
-# Casse professionali: parametri indicativi, ogni cassa ha regolamento proprio.
-CASSE_PROFESSIONALI = {
-    "nessuna": ("Nessuna cassa (Gestione Separata)", 0.0, 0.0),
-    "inarcassa": ("Inarcassa (ingegneri e architetti)", 0.145, 0.04),
-    "cnpadc": ("CNPADC (dottori commercialisti)", 0.12, 0.04),
-    "enpacl": ("ENPACL (consulenti del lavoro)", 0.12, 0.04),
-    "cassa_forense": ("Cassa Forense (avvocati)", 0.16, 0.04),
-}
+# Nessuna cassa professionale: il catalogo non contiene professioni
+# ordinistiche, tutte passano dalla Gestione Separata o dalle gestioni
+# d'impresa. Vanno aggiunte solo insieme alle professioni che le usano.
 
 # ---------------------------------------------------------------------------
 # REGIME ORDINARIO / SEMPLIFICATO
@@ -133,7 +128,9 @@ DETRAZIONE_AUTONOMI_SOGLIA_AZZERAMENTO = 50_000.0
 DETRAZIONE_AUTONOMI_BASE_INTERMEDIA = 500.0
 DETRAZIONE_AUTONOMI_QUOTA_DECRESCENTE = 765.0
 
-IRAP_ALIQUOTA_ORDINARIA = 0.039  # dovuta solo con autonoma organizzazione
+# IRAP: non prevista. Dal periodo d'imposta 2022 non e' piu' dovuta dalle
+# persone fisiche esercenti attivita' d'impresa, arti e professioni
+# (art. 1 c. 8 L. 234/2021), e questo strumento si rivolge solo a loro.
 
 # ---------------------------------------------------------------------------
 # IVA E OPERAZIONI CON L'ESTERO
