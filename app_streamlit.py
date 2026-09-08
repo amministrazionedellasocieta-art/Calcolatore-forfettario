@@ -733,9 +733,10 @@ with tab_conti:
                         "Tipo": m.tipo.capitalize(),
                         "Area": m.area,
                         "Importo": m.importo,
-                        "IVA reverse charge": m.iva_reverse_charge,
+                        "IVA reverse charge": iva,
+                        "IVA in dogana": m.iva_in_dogana,
                     }
-                    for m in sorted(registro.movimenti, key=lambda x: x.data)
+                    for m, iva in registro.dettaglio_iva()
                 ]
             ),
             hide_index=True,

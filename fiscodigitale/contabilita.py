@@ -36,12 +36,40 @@ class Movimento:
         if self.tipo not in (INCASSO, SPESA):
             raise ValueError(f"tipo non valido: {self.tipo!r}")
 
-    @property
-    def iva_reverse_charge(self) -> float:
-        """IVA da versare se si tratta di un acquisto estero di servizi o beni."""
+    def iva_reverse_charge(self, cumulo_beni_ue: float = 0.0) -> float:
+        """IVA italiana da versare con F24 in inversione contabile.
+
+        Non tutti gli acquisti esteri la generano, e trattarli allo stesso modo
+        gonfia sia l'IVA dovuta sia l'accantonamento consigliato:
+
+        * i beni extra-UE scontano l'IVA in dogana, non in inversione contabile;
+        * per il forfettario gli acquisti di beni UE restano assoggettati
+          all'IVA del Paese del fornitore finche' il cumulo annuo non supera
+          la soglia (art. 38 c. 5 lett. c DL 331/93).
+
+        `cumulo_beni_ue` e' il totale degli acquisti intracomunitari di beni
+        gia' effettuati prima di questo movimento; lo fornisce il registro,
+        che e' l'unico a conoscere la cronologia.
+        """
         if self.tipo != SPESA or self.area == iva_estero.ITALIA:
             return 0.0
+        if self.oggetto == iva_estero.BENE:
+            if self.area == iva_estero.EXTRA_UE:
+                return 0.0
+            if cumulo_beni_ue + self.importo <= P.SOGLIA_OSS:
+                return 0.0
         return iva_estero.iva_reverse_charge(self.importo)
+
+    @property
+    def iva_in_dogana(self) -> float:
+        """IVA all'importazione: un costo reale, ma non un versamento con F24."""
+        if (
+            self.tipo == SPESA
+            and self.area == iva_estero.EXTRA_UE
+            and self.oggetto == iva_estero.BENE
+        ):
+            return iva_estero.iva_reverse_charge(self.importo)
+        return 0.0
 
 
 @dataclass(frozen=True)
@@ -125,9 +153,32 @@ class Registro:
             2,
         )
 
+    def dettaglio_iva(self) -> tuple[tuple[Movimento, float], ...]:
+        """Ogni movimento con l'IVA in inversione contabile che genera.
+
+        Scorre in ordine di data perche' la soglia sugli acquisti di beni UE
+        si misura sul cumulo progressivo dell'anno.
+        """
+        cumulo_beni_ue = 0.0
+        righe: list[tuple[Movimento, float]] = []
+        for m in sorted(self.movimenti, key=lambda x: x.data):
+            righe.append((m, m.iva_reverse_charge(cumulo_beni_ue)))
+            if (
+                m.tipo == SPESA
+                and m.area == iva_estero.UE
+                and m.oggetto == iva_estero.BENE
+            ):
+                cumulo_beni_ue += m.importo
+        return tuple(righe)
+
     @property
     def iva_reverse_charge_maturata(self) -> float:
-        return round(sum(m.iva_reverse_charge for m in self.movimenti), 2)
+        return round(sum(iva for _, iva in self.dettaglio_iva()), 2)
+
+    @property
+    def iva_in_dogana(self) -> float:
+        """IVA assolta all'importazione: costo indetraibile, non versamento F24."""
+        return round(sum(m.iva_in_dogana for m in self.movimenti), 2)
 
     def incassi_per_mese(self) -> dict[int, float]:
         totali = {mese: 0.0 for mese in range(1, 13)}
@@ -138,9 +189,9 @@ class Registro:
 
     def iva_reverse_charge_per_mese(self) -> dict[int, float]:
         totali = {mese: 0.0 for mese in range(1, 13)}
-        for m in self.movimenti:
-            if m.iva_reverse_charge:
-                totali[m.data.month] = round(totali[m.data.month] + m.iva_reverse_charge, 2)
+        for m, iva in self.dettaglio_iva():
+            if iva:
+                totali[m.data.month] = round(totali[m.data.month] + iva, 2)
         return totali
 
     # -- proiezioni ------------------------------------------------------
@@ -221,6 +272,12 @@ class Registro:
             messaggi.append(
                 f"[IVA] Hai maturato {formato.numero(self.iva_reverse_charge_maturata, 2)} euro di IVA "
                 "su acquisti esteri da versare con F24."
+            )
+        if self.iva_in_dogana > 0:
+            messaggi.append(
+                f"[IVA] Altri {formato.numero(self.iva_in_dogana, 2)} euro di IVA sono assolti "
+                "in dogana sulle importazioni: non si versano con F24 ma restano "
+                "un costo indetraibile."
             )
         return tuple(messaggi)
 

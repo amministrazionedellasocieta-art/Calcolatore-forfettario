@@ -119,7 +119,7 @@ testabili in isolamento.
 | `diagnosi.py` | Orchestrazione: dal lavoro alla checklist completa |
 
 ```bash
-python3 -m unittest discover -s tests -v   # 126 test
+python3 -m unittest discover -s tests -v   # 137 test
 ```
 
 I test del motore girano senza dipendenze: i cinque smoke test dell'interfaccia

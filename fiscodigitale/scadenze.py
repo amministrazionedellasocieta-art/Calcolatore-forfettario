@@ -208,8 +208,23 @@ def prossime(
     da: date | None = None,
     profilo: Profilo | None = None,
 ) -> tuple[Scadenza, ...]:
-    """Prossime scadenze a partire da una data (default: oggi)."""
+    """Prossime scadenze a partire da una data (default: oggi).
+
+    Include anche il calendario dell'anno precedente: alcune scadenze di un
+    anno cadono in quello successivo, come la quarta rata fissa di artigiani e
+    commercianti a febbraio, che a gennaio sarebbe la prima in arrivo.
+    """
     oggi = da or date.today()
-    tutte = calendario(oggi.year, profilo) + calendario(oggi.year + 1, profilo)
-    future = [s for s in tutte if s.data >= oggi]
+    tutte = (
+        calendario(oggi.year - 1, profilo)
+        + calendario(oggi.year, profilo)
+        + calendario(oggi.year + 1, profilo)
+    )
+    viste: set[tuple[date, str]] = set()
+    future: list[Scadenza] = []
+    for s in sorted(tutte, key=lambda x: (x.data, x.titolo)):
+        chiave = (s.data, s.titolo)
+        if s.data >= oggi and chiave not in viste:
+            viste.add(chiave)
+            future.append(s)
     return tuple(future[:quante])

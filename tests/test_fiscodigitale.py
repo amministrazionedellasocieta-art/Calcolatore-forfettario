@@ -180,6 +180,21 @@ class TestForfettario(unittest.TestCase):
         )
         self.assertGreater(piano[0].contributi_cassa, 0)
 
+    def test_credito_da_acconti_compensa_anche_l_acconto_successivo(self):
+        # Regressione: il credito da acconti in eccesso veniva usato solo sul
+        # saldo, gonfiando la cassa dell'anno successivo.
+        piano = forfettario.piano_cassa(self.situazione(contributi_versati=None), anni=4)
+        anno_con_credito = piano[2]
+        self.assertLess(anno_con_credito.imposta_cassa, anno_con_credito.imposta_competenza)
+
+    def test_cassa_e_competenza_convergono_sul_lungo_periodo(self):
+        piano = forfettario.piano_cassa(self.situazione(contributi_versati=None), anni=12)
+        competenza = sum(a.imposta_competenza for a in piano)
+        cassa = sum(a.imposta_cassa for a in piano)
+        # A regime la cassa insegue la competenza: lo scarto residuo e' al
+        # massimo un anno di imposta, non un accumulo che cresce.
+        self.assertLess(abs(competenza - cassa), max(a.imposta_competenza for a in piano) * 1.5)
+
     def test_ricavi_per_netto_obiettivo(self):
         s = self.situazione(contributi_versati=None)
         ricavi = forfettario.ricavi_per_netto_obiettivo(30_000, s)
@@ -414,6 +429,22 @@ class TestScadenze(unittest.TestCase):
         versamenti = [s for s in cal if "inversione contabile" in s.titolo]
         self.assertEqual(len(versamenti), 12)
 
+    def test_prossime_includono_la_coda_dell_anno_precedente(self):
+        # La quarta rata fissa del 2026 cade a febbraio 2027: a gennaio 2027
+        # e' la prima scadenza in arrivo.
+        pross = scadenze.prossime(
+            3, da=date(2027, 1, 15), profilo=scadenze.Profilo(gestione=previdenza.COMMERCIANTI)
+        )
+        self.assertEqual(pross[0].data, date(2027, 2, 16))
+        self.assertIn("quarta", pross[0].titolo)
+
+    def test_prossime_senza_duplicati(self):
+        pross = scadenze.prossime(
+            20, da=date(2026, 1, 2), profilo=scadenze.Profilo(gestione=previdenza.COMMERCIANTI)
+        )
+        chiavi = [(s.data, s.titolo) for s in pross]
+        self.assertEqual(len(chiavi), len(set(chiavi)))
+
     def test_prossime_sono_future(self):
         oggi = date(2026, 9, 6)
         for s in scadenze.prossime(5, da=oggi):
@@ -439,6 +470,48 @@ class TestContabilita(unittest.TestCase):
 
     def test_iva_reverse_charge_solo_su_spese_estere(self):
         self.assertAlmostEqual(self.registro().iva_reverse_charge_maturata, 1_100, places=2)
+
+    def test_beni_ue_sotto_soglia_non_generano_iva(self):
+        # Il registro deve seguire la stessa regola del motore IVA: sotto la
+        # soglia annua l'acquisto sconta l'IVA del Paese del fornitore.
+        r = contabilita.Registro(2026)
+        r.aggiungi(contabilita.Movimento(
+            date(2026, 3, 1), "merce", 1_000, tipo=contabilita.SPESA,
+            area=iva_estero.UE, oggetto=iva_estero.BENE,
+        ))
+        self.assertEqual(r.iva_reverse_charge_maturata, 0.0)
+
+    def test_beni_ue_oltre_soglia_generano_iva(self):
+        r = contabilita.Registro(2026)
+        for mese in range(1, 5):
+            r.aggiungi(contabilita.Movimento(
+                date(2026, mese, 1), "merce", 4_000, tipo=contabilita.SPESA,
+                area=iva_estero.UE, oggetto=iva_estero.BENE,
+            ))
+        # I primi due restano sotto i 10.000; il terzo supera la soglia.
+        self.assertAlmostEqual(r.iva_reverse_charge_maturata, 2 * 880.0, places=2)
+
+    def test_beni_extra_ue_pagano_in_dogana_non_con_f24(self):
+        r = contabilita.Registro(2026)
+        r.aggiungi(contabilita.Movimento(
+            date(2026, 5, 1), "import", 3_000, tipo=contabilita.SPESA,
+            area=iva_estero.EXTRA_UE, oggetto=iva_estero.BENE,
+        ))
+        self.assertEqual(r.iva_reverse_charge_maturata, 0.0)
+        self.assertAlmostEqual(r.iva_in_dogana, 660.0, places=2)
+        self.assertTrue(any("dogana" in a for a in r.allerte(date(2026, 6, 1))))
+
+    def test_servizi_esteri_generano_sempre_iva(self):
+        for area in (iva_estero.UE, iva_estero.EXTRA_UE):
+            r = contabilita.Registro(2026)
+            r.aggiungi(contabilita.Movimento(
+                date(2026, 4, 1), "ads", 5_000, tipo=contabilita.SPESA, area=area
+            ))
+            self.assertAlmostEqual(r.iva_reverse_charge_maturata, 1_100.0, places=2, msg=area)
+
+    def test_dettaglio_iva_copre_tutti_i_movimenti(self):
+        r = self.registro()
+        self.assertEqual(len(r.dettaglio_iva()), len(r.movimenti))
 
     def test_movimento_anno_sbagliato(self):
         with self.assertRaises(ValueError):
@@ -743,6 +816,29 @@ class TestMultiAttivita(unittest.TestCase):
         ))
         self.assertEqual(d.gestione, previdenza.COMMERCIANTI)
         self.assertTrue(any(v.nome == "Attivita' prevalente" for v in d.verifiche))
+
+    def test_attivita_secondaria_non_classificata_tiene_aperta_la_diagnosi(self):
+        # Regressione: contava solo la prevalente, quindi una secondaria senza
+        # natura dichiarata spariva dalla diagnosi.
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="copywriter",
+            ricavi_attesi=50_000,
+            altre_attivita=(diagnosi.AltraAttivita("streamer", 10_000),),
+        ))
+        self.assertTrue(d.inquadramento_da_scegliere)
+        self.assertIsNotNone(d.costo_inquadramento)
+        avviso = next(v for v in d.verifiche if v.nome == "Inquadramento da confermare")
+        self.assertIn("Streamer", avviso.messaggio)
+
+    def test_natura_dichiarata_sulla_secondaria_chiude_la_diagnosi(self):
+        d = diagnosi.analizza(diagnosi.Profilo(
+            professione="copywriter",
+            ricavi_attesi=50_000,
+            altre_attivita=(
+                diagnosi.AltraAttivita("streamer", 10_000, diagnosi.PROFESSIONALE),
+            ),
+        ))
+        self.assertFalse(d.inquadramento_da_scegliere)
 
     def test_prevalente_coincidente_non_genera_avviso(self):
         d = diagnosi.analizza(diagnosi.Profilo(

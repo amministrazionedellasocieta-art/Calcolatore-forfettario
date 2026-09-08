@@ -594,7 +594,14 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
     # L'inquadramento previdenziale segue l'attivita' prevalente per ricavi,
     # non quella dichiarata per prima.
     prevalente = max(attivita, key=lambda a: a.ricavi)
-    gestione, scelta_pendente = prevalente.gestione, prevalente.scelta_pendente
+    gestione = prevalente.gestione
+
+    # Basta una sola attivita' senza natura dichiarata perche' la diagnosi
+    # resti aperta: anche una secondaria puo' richiedere il trattamento
+    # d'impresa e una posizione contributiva a se'.
+    attive = tuple(a for a in attivita if a.ricavi > 0) or attivita
+    da_chiarire = tuple(a for a in attive if a.scelta_pendente)
+    scelta_pendente = bool(da_chiarire)
 
     coefficiente = forfettario.coefficiente_medio([a.componente for a in attivita])
     verifiche = list(_verifiche(profilo, prof))
@@ -621,30 +628,44 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
     piano = forfettario.piano_cassa(situazione, anni=3)
 
     costo_inquadramento = None
-    if prevalente.professione.gestione_inps == professioni.DIPENDE:
+    if da_chiarire or prevalente.professione.gestione_inps == professioni.DIPENDE:
+        # Il confronto riguarda l'attivita' da chiarire piu' rilevante, che non
+        # coincide necessariamente con la prevalente.
+        oggetto = max(da_chiarire, key=lambda a: a.ricavi) if da_chiarire else prevalente
         costo_inquadramento = _costo_inquadramento(
-            prevalente.professione, profilo, riduzione, prevalente.reddito
+            oggetto.professione, profilo, riduzione, oggetto.reddito
         )
         if scelta_pendente:
             delta = costo_inquadramento["differenza"]
             if abs(delta) < 1:
                 verso = "Con i tuoi numeri le due forme costano quasi uguale"
             elif delta > 0:
-                verso = f"Con i tuoi numeri la forma d'impresa costa {formato.numero(delta, 0)} euro in piu'"
+                verso = (
+                    f"Con i tuoi numeri la forma d'impresa costa "
+                    f"{formato.numero(delta, 0)} euro in piu'"
+                )
             else:
-                verso = f"Con i tuoi numeri la forma d'impresa costa {formato.numero(abs(delta), 0)} euro in meno"
+                verso = (
+                    f"Con i tuoi numeri la forma d'impresa costa "
+                    f"{formato.numero(abs(delta), 0)} euro in meno"
+                )
+            quale = (
+                f"L'attivita' da chiarire e' {oggetto.professione.nome}. "
+                if len(attivita) > 1
+                else ""
+            )
             verifiche.append(Verifica(
                 "Inquadramento da confermare",
                 ATTENZIONE,
-                "Questo lavoro puo' essere esercitato in forma professionale o "
+                f"{quale}Questo lavoro puo' essere esercitato in forma professionale o "
                 "d'impresa, e non lo decide il fatturato: dipende da quanto pesano "
                 "l'organizzazione e i mezzi rispetto al tuo apporto personale. "
-                f"{verso}: {formato.numero(costo_inquadramento['professionale'], 0)} euro in Gestione "
-                f"Separata contro {formato.numero(costo_inquadramento['impresa'], 0)} come impresa. "
-                "Attenzione pero' al profilo di rischio: la quota fissa dell'impresa e' "
-                "dovuta anche in un anno senza incassi, la Gestione Separata no. "
-                "Il calcolo assume la forma professionale: indica come lavori per "
-                "avere i numeri giusti.",
+                f"{verso}: {formato.numero(costo_inquadramento['professionale'], 0)} euro in "
+                f"Gestione Separata contro {formato.numero(costo_inquadramento['impresa'], 0)} "
+                "come impresa. Attenzione pero' al profilo di rischio: la quota fissa "
+                "dell'impresa e' dovuta anche in un anno senza incassi, la Gestione "
+                "Separata no. Il calcolo assume la forma professionale: indica come "
+                "lavori per avere i numeri giusti.",
                 "art. 2195 c.c.; art. 53 TUIR",
             ))
 

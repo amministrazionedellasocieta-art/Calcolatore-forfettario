@@ -318,7 +318,8 @@ def piano_cassa(
 
     piano: list[AnnoDiCassa] = []
     # Storico per competenza: indice 0 = anno corrente, poi si scorre.
-    imposta_prec = imposta_prec2 = 0.0
+    imposta_prec = 0.0
+    acconti_versati_prec = 0.0
     variabile_prec = variabile_prec2 = 0.0
     credito_imposta = 0.0  # acconti versati in eccesso, riportati in avanti
 
@@ -346,11 +347,18 @@ def piano_cassa(
         esito = calcola(replace(situazione, ricavi=ricavi, contributi_versati=contributi_cassa))
 
         # 4. Imposta effettivamente versata nell'anno: saldo dell'anno prima
-        # (al netto degli acconti gia' versati) piu' acconti dell'anno corrente.
-        conguaglio = imposta_prec - imposta_prec2 * P.ACCONTO_PERCENTUALE - credito_imposta
+        # (al netto degli acconti realmente versati) piu' acconti dell'anno
+        # corrente. Il credito da acconti in eccesso compensa prima il saldo e
+        # poi gli acconti stessi, come avviene in F24.
+        conguaglio = imposta_prec - acconti_versati_prec - credito_imposta
         saldo_imposta = max(0.0, conguaglio)
         credito_imposta = max(0.0, -conguaglio)
-        acconto_imposta = acconti(imposta_prec).totale
+
+        acconto_dovuto = acconti(imposta_prec).totale
+        compensazione = min(credito_imposta, acconto_dovuto)
+        acconto_imposta = acconto_dovuto - compensazione
+        credito_imposta -= compensazione
+
         imposta_cassa = saldo_imposta + acconto_imposta
 
         dettaglio: list[str] = []
@@ -359,6 +367,11 @@ def piano_cassa(
         else:
             dettaglio.append(f"Saldo imposta anno precedente: {formato.numero(saldo_imposta, 2)} euro.")
             dettaglio.append(f"Acconti imposta dell'anno: {formato.numero(acconto_imposta, 2)} euro.")
+            if compensazione:
+                dettaglio.append(
+                    f"Credito da acconti in eccesso usato in compensazione: "
+                    f"{formato.numero(compensazione, 2)} euro."
+                )
         if gestione_impresa:
             dettaglio.append(
                 f"Quota fissa INPS in quattro rate: {formato.numero(competenza.quota_fissa, 2)} euro."
@@ -386,7 +399,8 @@ def piano_cassa(
             )
         )
 
-        imposta_prec2, imposta_prec = imposta_prec, esito.imposta_sostitutiva
+        imposta_prec = esito.imposta_sostitutiva
+        acconti_versati_prec = acconto_imposta
         variabile_prec2, variabile_prec = variabile_prec, competenza.quota_variabile
 
     return tuple(piano)
