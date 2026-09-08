@@ -1,0 +1,43 @@
+name: Test
+
+# I push sui branch di lavoro sono gia' coperti dall'evento pull_request:
+# elencarli anche qui faceva girare ogni job due volte.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Un nuovo push annulla la verifica ancora in corso sullo stesso riferimento.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  motore:
+    name: Motore fiscale (senza dipendenze)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Test del pacchetto fiscodigitale
+        run: python -m unittest discover -s tests -v
+
+  app:
+    name: Interfaccia Streamlit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Installazione delle dipendenze
+        run: pip install -r requirements.txt
+      - name: Smoke test dell'app
+        run: python -m unittest tests.test_app_streamlit -v
