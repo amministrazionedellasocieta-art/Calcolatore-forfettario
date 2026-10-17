@@ -27,3 +27,8 @@ L'aggiornamento corregge i casi indicati; non costituisce validazione completa d
 
 `python3 -m unittest discover -s tests`: 149 test, incluso Streamlit.
 I nuovi casi di regressione hanno riprodotto i difetti prima della correzione.
+
+
+## Successiva revisione del catalogo
+
+Completato il confronto delle 44 schede con struttura, note e raccordo ISTAT aggiornato 2026; criteri e ambiti supportati sono in [VERIFICA_CATALOGO.md](VERIFICA_CATALOGO.md). Questa fase aggiunge sospensione dei numeri per dati incompleti, casi FPLS e previdenza mista. Non equivale a validazione integrale di tutti i moduli fiscali.

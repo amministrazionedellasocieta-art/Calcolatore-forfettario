@@ -58,6 +58,7 @@ class AltraAttivita:
     professione: str
     ricavi: float
     natura_attivita: str | None = None
+    codice_ateco: str | None = None
 
     def __post_init__(self) -> None:
         if self.ricavi < 0:
@@ -124,6 +125,9 @@ class Profilo:
     prima_iscrizione_2025: bool = False
     riduzione_richiesta: int = 0
     requisiti_startup_confermati: bool = False
+    codice_ateco: str | None = None
+    prestazioni_spettacolo: bool | None = None
+    verifica_specialistica_confermata: bool = False
 
     def __post_init__(self) -> None:
         if self.ricavi_attesi < 0:
@@ -168,6 +172,14 @@ class Diagnosi:
     contributi_doppia_iscrizione: float | None = None
 
     @property
+    def stima_utilizzabile(self) -> bool:
+        """I risultati interni sono scenari finche' manca una verifica necessaria."""
+        return (self.professione.slug != "trader-cripto" and self.ammesso_al_forfettario
+                and not self.inquadramento_da_scegliere
+                and not any(v.nome == "Classificazione da completare" for v in self.verifiche)
+                and not any(v.nome == "Previdenza da verificare" for v in self.verifiche))
+
+    @property
     def multi_attivita(self) -> bool:
         return len(self.attivita) > 1
 
@@ -194,6 +206,10 @@ class Diagnosi:
         )
 
     def sintesi(self) -> str:
+        if self.ammesso_al_forfettario and not self.stima_utilizzabile:
+            codici = ", ".join(a.professione.ateco or "ATECO da scegliere" for a in self.attivita)
+            return (f"{self.professione.nome} ({codici}): classificazione o previdenza "
+                    "da completare. I risultati interni sono solo scenari ipotetici.")
         if not self.ammesso_al_forfettario:
             return (
                 f"{self.professione.nome}: con i dati indicati il regime forfettario "
@@ -251,7 +267,7 @@ def _gestione_effettiva(
         return mappa[prof.gestione_inps], False
 
     if natura_attivita == IMPRESA:
-        gestione = previdenza.COMMERCIANTI if prof.camera_commercio else previdenza.ARTIGIANI
+        gestione = previdenza.ARTIGIANI if prof.slug == "fotografo" else previdenza.COMMERCIANTI
         return gestione, False
     if natura_attivita == PROFESSIONALE:
         return previdenza.GESTIONE_SEPARATA, False
@@ -261,14 +277,12 @@ def _gestione_effettiva(
 
 def _risolvi_attivita(profilo: Profilo) -> tuple[AttivitaRisolta, ...]:
     """Determina inquadramento e componente di reddito per ogni attivita'."""
-    voci: list[tuple[str, float, str | None]] = [
-        (profilo.professione, profilo.ricavi_attesi, profilo.natura_attivita)
-    ]
-    voci.extend((a.professione, a.ricavi, a.natura_attivita) for a in profilo.altre_attivita)
+    voci = [(profilo.professione, profilo.ricavi_attesi, profilo.natura_attivita, profilo.codice_ateco)]
+    voci.extend((a.professione, a.ricavi, a.natura_attivita, a.codice_ateco) for a in profilo.altre_attivita)
 
     risolte: list[AttivitaRisolta] = []
-    for slug, ricavi, natura in voci:
-        prof = professioni.get(slug)
+    for slug, ricavi, natura, codice in voci:
+        prof = professioni.con_codice(slug, codice)
         gestione, pendente = _gestione_effettiva(prof, natura, profilo.gestione_scelta)
         risolte.append(AttivitaRisolta(
             professione=prof,
@@ -309,7 +323,7 @@ def _costo_inquadramento(
     prof: professioni.Professione, profilo: Profilo, riduzione: int, reddito: float
 ) -> dict[str, float]:
     """Quanto costa, in contributi, l'una o l'altra forma di esercizio."""
-    gestione_impresa = previdenza.COMMERCIANTI if prof.camera_commercio else previdenza.ARTIGIANI
+    gestione_impresa = previdenza.ARTIGIANI if prof.slug == "fotografo" else previdenza.COMMERCIANTI
 
     come_professionista = previdenza.calcola(
         reddito,
@@ -447,16 +461,16 @@ def _adempimenti(profilo: Profilo, prof: professioni.Professione, gestione: str)
             + (
                 "Attivita' d'impresa: si presenta la ComUnica al Registro Imprese, che "
                 "attiva insieme Agenzia delle Entrate, INPS e Camera di Commercio."
-                if prof.camera_commercio
+                if gestione in previdenza.GESTIONI_IMPRESA
                 else "Attivita' professionale: si presenta il modello AA9/12 "
                      "all'Agenzia delle Entrate, gratuitamente e senza intermediari."
             ),
             "Prima di iniziare l'attivita' o entro 30 giorni",
-            costo_indicativo="Gratuito" if not prof.camera_commercio else "Circa 150-250 euro di diritti e bolli",
+            costo_indicativo="Gratuito" if gestione not in previdenza.GESTIONI_IMPRESA else "Circa 150-250 euro di diritti e bolli",
         ),
     ]
 
-    if prof.camera_commercio:
+    if gestione in previdenza.GESTIONI_IMPRESA:
         lista.append(Adempimento(
             "Iscrizione al Registro Imprese e SCIA",
             "L'esercizio in forma d'impresa richiede l'iscrizione alla Camera di "
@@ -594,11 +608,14 @@ def _operazioni_iva(profilo: Profilo, prof: professioni.Professione) -> tuple[tu
 
 def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
     """Produce la diagnosi completa per un profilo."""
-    prof = professioni.get(profilo.professione)
+    if profilo.prestazioni_spettacolo is True:
+        raise ValueError("Possibile Fondo Spettacolo (FPLS): calcolo non supportato. "
+                         "Verificare contratto, mansioni e obblighi del committente.")
+    prof = professioni.con_codice(profilo.professione, profilo.codice_ateco)
     attivita = _risolvi_attivita(profilo)
 
-    # L'inquadramento previdenziale segue l'attivita' prevalente per ricavi,
-    # non quella dichiarata per prima.
+    # Scenario interno a gestione unica: per attivita' miste non e' utilizzabile.
+    # La prevalenza dei ricavi non sostituisce i requisiti previdenziali.
     prevalente = max(attivita, key=lambda a: a.ricavi)
     gestione = prevalente.gestione
 
@@ -611,6 +628,36 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
 
     coefficiente = forfettario.coefficiente_medio([a.componente for a in attivita])
     verifiche = list(_verifiche(profilo, prof))
+    for a in attivita:
+        scheda = a.professione.verifica
+        if a.professione.slug != "trader-cripto" and not a.professione.ateco:
+            verifiche.append(Verifica("Classificazione da completare", ATTENZIONE,
+                f"{a.professione.nome}: {scheda['criterio']} Scegli uno scenario "
+                "coerente o richiedi una classificazione personalizzata.",
+                "ISTAT ATECO 2025, note esplicative e raccordo aggiornamento 2026"))
+        if scheda["verifica_specialistica"] and not profilo.verifica_specialistica_confermata:
+            verifiche.append(Verifica("Classificazione da completare", ATTENZIONE,
+                f"{a.professione.nome}: {scheda['criterio']}",
+                "Verifica di contratti, mansioni e modalita' concrete"))
+        if (a.e_impresa and a.professione.gestione_inps == professioni.DIPENDE
+                and not profilo.verifica_specialistica_confermata):
+            verifiche.append(Verifica("Previdenza da verificare", ATTENZIONE,
+                f"{a.professione.nome}: lo scenario d'impresa richiede conferma "
+                "della gestione INPS, di abitualita', partecipazione personale e "
+                "organizzazione effettiva. Non basta il solo codice ATECO.",
+                "Requisiti della gestione previdenziale applicabile"))
+        if scheda["possibile_fpls"] and profilo.prestazioni_spettacolo is None:
+            verifiche.append(Verifica("Previdenza da verificare", ATTENZIONE,
+                f"{a.professione.nome}: verificare se le prestazioni rientrano nel "
+                "Fondo Spettacolo. Non basta scegliere fra lavoro autonomo e impresa.",
+                "Circolare INPS 44/2025, paragrafi 3.1 e 3.2"))
+    nature_attive = {a.e_impresa for a in attivita if a.ricavi > 0}
+    if len(nature_attive) > 1:
+        verifiche.append(Verifica("Previdenza da verificare", ATTENZIONE,
+            "Attivita' professionale e d'impresa: non si sceglie una sola gestione "
+            "in base ai ricavi prevalenti. Verificare separatamente i requisiti "
+            "delle iscrizioni; i totali a gestione unica non sono utilizzabili.",
+            "Art. 12 c. 11 DL 78/2010; circolare INPS 78/2013"))
     bloccato = any(v.esito == BLOCCANTE for v in verifiche)
 
     riduzione = profilo.riduzione_richiesta
@@ -678,7 +725,7 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
                 "art. 2195 c.c.; art. 53 TUIR",
             ))
 
-    if not prof.ateco:
+    if prof.slug == "trader-cripto":
         aliquota = P.CRIPTO["aliquota_plusvalenze"]
         verifiche.append(Verifica(
             "Non e' un'attivita' con partita IVA", ATTENZIONE,
@@ -701,8 +748,8 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
                 ATTENZIONE,
                 f"L'attivita' con piu' ricavi non e' quella che hai indicato come "
                 f"principale ma {prevalente.professione.nome} "
-                f"({formato.numero(prevalente.ricavi, 0)} euro). L'inquadramento previdenziale segue "
-                "la prevalente: verifica quale codice ATECO hai dichiarato come primario.",
+                f"({formato.numero(prevalente.ricavi, 0)} euro). La prevalenza per ricavi non determina l'INPS: "
+                "verifica i requisiti delle singole gestioni.",
                 "art. 1 c. 54 L. 190/2014",
             ))
 

@@ -625,7 +625,7 @@ class TestDiagnosi(unittest.TestCase):
         self.assertGreater(costo["impresa"], costo["professionale"])
 
     def test_professioni_certe_non_chiedono_la_scelta(self):
-        for slug in ("sviluppatore-software", "ecommerce"):
+        for slug in ("ecommerce",):
             d = diagnosi.analizza(diagnosi.Profilo(professione=slug, ricavi_attesi=45_000))
             self.assertFalse(d.inquadramento_da_scegliere, slug)
             self.assertIsNone(d.costo_inquadramento, slug)
@@ -824,6 +824,7 @@ class TestMultiAttivita(unittest.TestCase):
         d = diagnosi.analizza(diagnosi.Profilo(
             professione="copywriter",
             ricavi_attesi=50_000,
+            natura_attivita=diagnosi.PROFESSIONALE,
             altre_attivita=(diagnosi.AltraAttivita("streamer", 10_000),),
         ))
         self.assertTrue(d.inquadramento_da_scegliere)
@@ -835,6 +836,7 @@ class TestMultiAttivita(unittest.TestCase):
         d = diagnosi.analizza(diagnosi.Profilo(
             professione="copywriter",
             ricavi_attesi=50_000,
+            natura_attivita=diagnosi.PROFESSIONALE,
             altre_attivita=(
                 diagnosi.AltraAttivita("streamer", 10_000, diagnosi.PROFESSIONALE),
             ),

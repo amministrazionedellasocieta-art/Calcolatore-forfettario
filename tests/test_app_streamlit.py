@@ -52,6 +52,31 @@ class TestApp(unittest.TestCase):
         self.assertFalse(any("prudenziale al 15%" in x.value for x in at.markdown))
         self.assertTrue(any("Requisiti dichiarati confermati" in x.value for x in at.markdown))
 
+    def test_ecommerce_sospende_numeri_finche_manca_il_settore(self):
+        at=self.avvia()
+        next(x for x in at.sidebar.selectbox if x.label=="Professione").set_value(professioni.get("ecommerce")).run()
+        self.assert_senza_eccezioni(at)
+        self.assertNotIn("Netto annuo reale",[x.label for x in at.metric])
+        next(x for x in at.sidebar.selectbox if x.key=="scenario_ateco_principale").set_value("47.71.10").run()
+        self.assert_senza_eccezioni(at)
+        self.assertIn("Netto annuo reale",[x.label for x in at.metric])
+
+    def test_fpls_non_mostra_un_netto_forfettario(self):
+        at=self.avvia()
+        next(x for x in at.sidebar.radio if x.key=="verifica_fpls").set_value(True).run()
+        self.assert_senza_eccezioni(at)
+        self.assertFalse(at.metric)
+        self.assertTrue(any("FPLS" in x.value for x in at.warning))
+
+    def test_influencer_professionale_dopo_verifiche(self):
+        at=self.avvia()
+        at.sidebar.radio[0].set_value("professionale")
+        next(x for x in at.sidebar.radio if x.key=="verifica_fpls").set_value(False)
+        next(x for x in at.sidebar.checkbox if x.key=="verifica_specialistica").set_value(True)
+        at.run()
+        self.assert_senza_eccezioni(at)
+        self.assertIn("Netto annuo reale",[x.label for x in at.metric])
+
     def test_causa_di_esclusione(self):
         at = self.avvia()
         at.sidebar.number_input[4].set_value(50_000).run()  # redditi dipendente

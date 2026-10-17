@@ -1,5 +1,9 @@
 # Fisco Digitale
 
+Revisione del catalogo: [criteri, fonti e verifica delle 44 schede](VERIFICA_CATALOGO.md).
+I codici sono scenari da confermare sul contenuto reale; per i casi incompleti
+app e CLI sospendono netto, confronto e piano.
+
 Fiscalità e contabilità per i lavori digitali — anno d'imposta 2026.
 
 I simulatori di regime forfettario online chiedono "quanto fatturi" e "che
@@ -9,7 +13,7 @@ domande che gli servono non sono nel simulatore.
 
 Questo progetto parte dal lavoro reale e arriva a tutto il resto: codice ATECO,
 coefficiente, cassa previdenziale, adempimenti, trattamento IVA delle piattaforme
-estere, scadenze, soglie e cassa dei primi anni.
+estere, scadenze, soglie e cassa dei primi anni, nei casi supportati.
 
 ## Cosa fa, in concreto
 
@@ -45,8 +49,8 @@ sempre nella stessa direzione.
 online: sponsorizzazioni al 78% e ricavi pubblicitari al 67%, oppure uno shop
 al 40% e consulenza al 78%. Ogni attività usa il proprio coefficiente
 (art. 1 c. 64 L. 190/2014), il limite degli 85.000 € si misura sulla somma dei
-ricavi (art. 1 c. 54), e la cassa previdenziale segue l'attività prevalente per
-ricavi. Quando si cumulano un'attività professionale e una d'impresa lo
+ricavi (art. 1 c. 54), e la previdenza richiede la verifica delle singole attività, senza
+applicare automaticamente la prevalenza dei ricavi. Quando si cumulano un'attività professionale e una d'impresa lo
 strumento stima anche quanto costerebbe la doppia iscrizione INPS.
 
 **L'inquadramento non lo indovina** — per i lavori che possono essere
@@ -75,8 +79,8 @@ Da riga di comando, senza browser:
 ```bash
 python3 -m fiscodigitale --elenco
 python3 -m fiscodigitale --cerca twitch
-python3 -m fiscodigitale --professione dropshipping --ricavi 60000 --costi 35000 --esteri 4000
-python3 -m fiscodigitale --professione influencer --ricavi 30000 --altra youtuber:15000 --natura impresa
+python3 -m fiscodigitale --professione dropshipping --ricavi 60000 --costi 35000 --esteri 4000 --ateco 47.71.10
+python3 -m fiscodigitale --professione influencer --ricavi 30000 --altra youtuber:15000 --natura impresa --escludi-fpls --verifica-specialistica-confermata
 ```
 
 Come libreria:
@@ -119,7 +123,7 @@ testabili in isolamento.
 | `diagnosi.py` | Orchestrazione: dal lavoro alla checklist completa |
 
 ```bash
-python3 -m unittest discover -s tests -v   # 137 test
+python3 -m unittest discover -s tests -v   # 164 test
 ```
 
 I test del motore girano senza dipendenze: i cinque smoke test dell'interfaccia
@@ -167,9 +171,9 @@ In particolare:
   Comune;
 - l'entità che paga una piattaforma può cambiare nel tempo: va sempre verificata
   sul contratto o sull'estratto conto prima di impostare la fatturazione;
-- con attività di natura diversa nella stessa partita IVA i contributi sono
-  calcolati sulla gestione prevalente e la doppia iscrizione è mostrata come
-  stima: le regole INPS sulla prevalenza vanno verificate caso per caso.
+- con attività professionali e d'impresa contemporanee, i totali del modello
+  a gestione unica non sono utilizzabili: app e CLI sospendono i risultati
+  economici finché serve un calcolo specifico delle singole iscrizioni.
 
 ## Da fare
 
@@ -181,3 +185,4 @@ In particolare:
 - collegamento del modulo cripto alla diagnosi, oggi solo segnalata a chi
   investe in proprio;
 - casse professionali, quando il catalogo includerà professioni ordinistiche.
+

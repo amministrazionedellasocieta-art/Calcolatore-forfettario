@@ -91,6 +91,16 @@ if scelta.gestione_inps == professioni.DIPENDE:
              "Lascia vuoto per vedere il confronto tra le due forme.",
     )
 
+codice_ateco = None
+if len(scelta.codici_scenario) > 1:
+    codice_ateco = st.sidebar.selectbox(
+        "Quale attivita' svolgi concretamente?", scelta.codici_scenario, index=None,
+        format_func=lambda c: f"{c} - {professioni.titolo_codice(c)}",
+        help=scelta.verifica["criterio"], key="scenario_ateco_principale",
+    )
+    if codice_ateco:
+        scelta = professioni.con_codice(scelta.slug, codice_ateco)
+
 st.sidebar.markdown("---")
 
 ricavi = st.sidebar.number_input(
@@ -156,9 +166,34 @@ with st.sidebar.expander("Altre fonti di ricavo"):
                 index=None,
                 key=f"natura_{altra.slug}",
             )
+        codice_altra = None
+        if len(altra.codici_scenario) > 1:
+            codice_altra = st.selectbox(
+                f"Scenario ATECO per {altra.nome}", altra.codici_scenario, index=None,
+                format_func=lambda c: f"{c} - {professioni.titolo_codice(c)}",
+                key=f"ateco_{altra.slug}", help=altra.verifica["criterio"],
+            )
         altre_attivita.append(
-            diagnosi.AltraAttivita(altra.slug, float(ricavi_altra), natura_altra)
+            diagnosi.AltraAttivita(altra.slug, float(ricavi_altra), natura_altra, codice_altra)
         )
+
+voci_profilo = [scelta] + [professioni.get(a.professione) for a in altre_attivita]
+spettacolo = None
+verifica_specialistica = False
+if any(p.verifica["possibile_fpls"] for p in voci_profilo):
+    spettacolo = st.sidebar.radio(
+        "Le prestazioni rientrano o possono rientrare nel Fondo Spettacolo?",
+        (True, False), index=None,
+        format_func=lambda x: "Si', o serve una verifica" if x else "No, ho verificato mansioni e contratti",
+        help="Comprende, nei casi previsti, prestazioni artistiche o tecniche e contenuti "
+             "pubblicitari su incarico di un brand o agenzia. Riferimento: INPS 44/2025.",
+        key="verifica_fpls",
+    )
+if any(p.verifica["verifica_specialistica"] or p.gestione_inps == professioni.DIPENDE for p in voci_profilo):
+    verifica_specialistica = st.sidebar.checkbox(
+        "Ho verificato con il consulente la qualificazione dei contratti e dei ricavi",
+        value=False, key="verifica_specialistica",
+    )
 
 with st.sidebar.expander("Come incassi"):
     clienti_esteri = st.checkbox("Fatturo a piattaforme o aziende estere", value=True)
@@ -211,6 +246,9 @@ profilo = diagnosi.Profilo(
     costi_annui=float(costi),
     prima_attivita=prima_attivita,
     requisiti_startup_confermati=requisiti_startup,
+    codice_ateco=codice_ateco,
+    prestazioni_spettacolo=spettacolo,
+    verifica_specialistica_confermata=verifica_specialistica,
     mesi_attivita=mesi,
     redditi_dipendente_anno_precedente=float(redditi_dipendente),
     partecipazioni_societarie=partecipazioni,
@@ -226,7 +264,15 @@ profilo = diagnosi.Profilo(
     altre_attivita=tuple(altre_attivita),
 )
 
-esame = diagnosi.analizza(profilo)
+try:
+    esame = diagnosi.analizza(profilo)
+except ValueError as errore:
+    if spettacolo is not True:
+        raise
+    st.title("Fisco Digitale")
+    st.warning(str(errore))
+    st.info("Serve una valutazione della prestazione e del contratto prima di stimare contributi e netto.")
+    st.stop()
 
 # ---------------------------------------------------------------------------
 # TESTATA
@@ -263,12 +309,14 @@ with tab_diagnosi:
     c1, c2, c3, c4 = st.columns(4)
     if esame.multi_attivita:
         c1.metric("Codici ATECO", f"{len(esame.attivita)} attivita'")
-        c2.metric("Coefficiente medio", percentuale(esame.coefficiente_medio, 1))
+        c2.metric("Coefficiente medio", percentuale(esame.coefficiente_medio, 1) if all(a.professione.ateco for a in esame.attivita) else "Da verificare")
     else:
         c1.metric("Codice ATECO", esame.professione.ateco or "—")
-        c2.metric("Coefficiente", f"{esame.professione.coefficiente_pct}%")
-    c3.metric("Cassa previdenziale", diagnosi.previdenza_label(esame.gestione).replace("INPS", "").strip())
-    c4.metric("Camera di Commercio", "Sì" if esame.professione.camera_commercio else "No")
+        c2.metric("Coefficiente", f"{esame.professione.coefficiente_pct}%" if esame.professione.ateco else "Da verificare")
+    c3.metric("Cassa previdenziale", (diagnosi.previdenza_label(esame.gestione).replace("INPS", "").strip()
+              if esame.stima_utilizzabile else "Da verificare"))
+    c4.metric("Camera di Commercio", ("Sì" if esame.gestione in previdenza.GESTIONI_IMPRESA else "No")
+              if esame.stima_utilizzabile else "Da verificare")
 
     st.caption(esame.professione.ateco_descrizione)
 
@@ -296,7 +344,7 @@ with tab_diagnosi:
             f"{euro(esame.esito_forfettario.reddito_forfetario)} · coefficiente medio "
             f"{percentuale(esame.coefficiente_medio, 1)}. Il limite degli "
             f"{euro(P.SOGLIA_RICAVI)} si misura sulla somma; l'inquadramento "
-            "previdenziale segue l'attivita' prevalente per ricavi."
+            "previdenziale richiede la verifica delle singole attivita'."
         )
         if esame.contributi_doppia_iscrizione:
             st.warning(
@@ -332,7 +380,7 @@ with tab_diagnosi:
             if v.riferimento:
                 st.caption(v.riferimento)
 
-    if esame.avvisi:
+    if esame.avvisi and esame.stima_utilizzabile:
         st.markdown("### Da sapere")
         for a in esame.avvisi:
             st.warning(a)
@@ -357,201 +405,207 @@ with tab_diagnosi:
 # TAB 2 - NUMERI
 # ---------------------------------------------------------------------------
 
+e = esame.esito_forfettario
 with tab_numeri:
-    e = esame.esito_forfettario
+    if not esame.stima_utilizzabile:
+        st.warning("Completa classificazione, natura dell'attivita' e verifica previdenziale "
+                   "nella barra laterale. Netto e confronto non sono disponibili finche' "
+                   "manca un dato necessario.")
+    else:
+        e = esame.esito_forfettario
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Netto annuo reale", euro(esame.netto_reale))
-    c2.metric("Netto mensile", euro(esame.netto_reale / 12))
-    c3.metric("Imposte e contributi", euro(e.totale_dovuto))
-    c4.metric("Pressione effettiva", percentuale(e.pressione_effettiva))
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Netto annuo reale", euro(esame.netto_reale))
+        c2.metric("Netto mensile", euro(esame.netto_reale / 12))
+        c3.metric("Imposte e contributi", euro(e.totale_dovuto))
+        c4.metric("Pressione effettiva", percentuale(e.pressione_effettiva))
 
-    st.progress(
-        min(1.0, e.pressione_effettiva),
-        text=f"Su ogni 100 € fatturati, {percentuale(e.pressione_effettiva, 0)} "
-             f"va tra imposta sostitutiva e INPS",
-    )
-
-    col_calcolo, col_grafico = st.columns([1, 1])
-
-    with col_calcolo:
-        st.markdown("#### Come si arriva al netto")
-        righe = [
-            ("Ricavi", e.ricavi),
-            (
-                f"Reddito forfetario ({percentuale(esame.coefficiente_medio, 1)}"
-                + (" medio)" if esame.multi_attivita else ")"),
-                e.reddito_forfetario,
-            ),
-            ("− Contributi dedotti", -e.contributi_dedotti),
-            ("= Imponibile", e.imponibile),
-            (f"− Imposta sostitutiva ({percentuale(e.aliquota, 0)})", -e.imposta_sostitutiva),
-            ("− Contributi INPS dovuti", -e.contributi_dovuti),
-            ("− Costi reali (non deducibili)", -profilo.costi_annui),
-            ("− IVA estera indetraibile", -esame.iva_estera_annua),
-            ("= Netto in tasca", esame.netto_reale),
-        ]
-        st.dataframe(
-            pd.DataFrame(righe, columns=["Voce", "Importo"]).style.format(
-                {"Importo": lambda v: euro(v, 2)}
-            ),
-            hide_index=True,
-            width="stretch",
+        st.progress(
+            min(1.0, e.pressione_effettiva),
+            text=f"Su ogni 100 € fatturati, {percentuale(e.pressione_effettiva, 0)} "
+                 f"va tra imposta sostitutiva e INPS",
         )
 
-        if e.contributi.riduzione_applicata:
-            st.success(
-                f"Riduzione contributiva del {e.contributi.riduzione_applicata}% applicata: "
-                f"risparmi {euro(e.contributi.risparmio_riduzione)} l'anno."
+        col_calcolo, col_grafico = st.columns([1, 1])
+
+        with col_calcolo:
+            st.markdown("#### Come si arriva al netto")
+            righe = [
+                ("Ricavi", e.ricavi),
+                (
+                    f"Reddito forfetario ({percentuale(esame.coefficiente_medio, 1)}"
+                    + (" medio)" if esame.multi_attivita else ")"),
+                    e.reddito_forfetario,
+                ),
+                ("− Contributi dedotti", -e.contributi_dedotti),
+                ("= Imponibile", e.imponibile),
+                (f"− Imposta sostitutiva ({percentuale(e.aliquota, 0)})", -e.imposta_sostitutiva),
+                ("− Contributi INPS dovuti", -e.contributi_dovuti),
+                ("− Costi reali (non deducibili)", -profilo.costi_annui),
+                ("− IVA estera indetraibile", -esame.iva_estera_annua),
+                ("= Netto in tasca", esame.netto_reale),
+            ]
+            st.dataframe(
+                pd.DataFrame(righe, columns=["Voce", "Importo"]).style.format(
+                    {"Importo": lambda v: euro(v, 2)}
+                ),
+                hide_index=True,
+                width="stretch",
             )
-        for nota in e.contributi.note:
-            st.caption(nota)
 
-    with col_grafico:
-        st.markdown("#### Dove finiscono i tuoi ricavi")
-        ripartizione = pd.DataFrame(
-            {
-                "Voce": ["Netto", "Contributi INPS", "Imposta sostitutiva", "Costi reali", "IVA estera"],
-                "Importo": [
-                    max(0.0, esame.netto_reale),
-                    e.contributi_dovuti,
-                    e.imposta_sostitutiva,
-                    profilo.costi_annui,
-                    esame.iva_estera_annua,
-                ],
-            }
+            if e.contributi.riduzione_applicata:
+                st.success(
+                    f"Riduzione contributiva del {e.contributi.riduzione_applicata}% applicata: "
+                    f"risparmi {euro(e.contributi.risparmio_riduzione)} l'anno."
+                )
+            for nota in e.contributi.note:
+                st.caption(nota)
+
+        with col_grafico:
+            st.markdown("#### Dove finiscono i tuoi ricavi")
+            ripartizione = pd.DataFrame(
+                {
+                    "Voce": ["Netto", "Contributi INPS", "Imposta sostitutiva", "Costi reali", "IVA estera"],
+                    "Importo": [
+                        max(0.0, esame.netto_reale),
+                        e.contributi_dovuti,
+                        e.imposta_sostitutiva,
+                        profilo.costi_annui,
+                        esame.iva_estera_annua,
+                    ],
+                }
+            )
+            st.bar_chart(ripartizione.set_index("Voce"), horizontal=True)
+
+            st.markdown("#### Quanto accantonare")
+            st.metric(
+                "Su ogni incasso metti da parte",
+                percentuale(e.accantonamento_consigliato, 0),
+                help="Include un margine per acconti e conguagli.",
+            )
+
+        st.markdown("---")
+        st.markdown("### Forfettario o ordinario?")
+        raffronto = esame.confronto_regimi
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Netto in forfettario", euro(raffronto.netto_forfettario))
+        c2.metric("Netto in ordinario", euro(raffronto.netto_ordinario))
+        c3.metric(
+            "Differenza",
+            euro(abs(raffronto.differenza)),
+            delta=("forfettario" if raffronto.conviene == "forfettario" else "ordinario"),
         )
-        st.bar_chart(ripartizione.set_index("Voce"), horizontal=True)
+        st.info(raffronto.sintesi)
 
-        st.markdown("#### Quanto accantonare")
-        st.metric(
-            "Su ogni incasso metti da parte",
-            percentuale(e.accantonamento_consigliato, 0),
-            help="Include un margine per acconti e conguagli.",
+        with st.expander("Come si compone il conto in regime ordinario"):
+            o = raffronto.esito_ordinario
+            righe_ord = [
+                ("Ricavi", o.ricavi),
+                ("− Costi deducibili", -o.costi),
+                ("= Reddito", o.reddito),
+                ("− Contributi (oneri deducibili)", -o.contributi_dovuti),
+                ("= Imponibile IRPEF", o.imponibile_irpef),
+                ("IRPEF lorda", o.irpef_lorda),
+                ("− Detrazione lavoro autonomo", -o.detrazione),
+                ("= IRPEF netta", o.irpef),
+                ("+ Addizionali", o.addizionali),
+            ]
+            st.dataframe(
+                pd.DataFrame(righe_ord, columns=["Voce", "Importo"]).style.format(
+                    {"Importo": lambda v: euro(v, 2)}
+                ),
+                hide_index=True,
+                width="stretch",
+            )
+            st.caption(f"Aliquota marginale: {percentuale(o.aliquota_marginale, 0)}")
+            for nota in o.note:
+                st.caption(nota)
+
+        if raffronto.costi_di_pareggio:
+            curva = []
+            passo = max(500, int(esame.ricavi_totali / 40)) if esame.ricavi_totali else 500
+            for costo in range(0, int(esame.ricavi_totali) + 1, passo):
+                c = mod_confronto.confronta(
+                    forfettario.Situazione(
+                        ricavi=esame.ricavi_totali,
+                        coefficiente=esame.coefficiente_medio,
+                        gestione=esame.gestione,
+                        startup=esame.esito_forfettario.aliquota == P.ALIQUOTA_SOSTITUTIVA_STARTUP,
+                        riduzione=e.contributi.riduzione_applicata,
+                        mesi_attivita=mesi,
+                    ),
+                    costi=float(costo),
+                    iva_indetraibile=esame.iva_estera_annua,
+                )
+                curva.append(
+                    {"Costi reali": costo, "Forfettario": c.netto_forfettario, "Ordinario": c.netto_ordinario}
+                )
+            st.line_chart(pd.DataFrame(curva).set_index("Costi reali"))
+            st.caption(
+                f"Le due curve si incrociano a {euro(raffronto.costi_di_pareggio)} di costi: "
+                "oltre quel punto il forfettario ti fa perdere soldi."
+            )
+
+        st.markdown("---")
+        st.markdown("### I primi tre anni di cassa")
+        st.caption(
+            "Competenza e cassa non coincidono: il primo anno si versa poco, il secondo "
+            "arrivano insieme saldo e acconti. E' il motivo per cui tanti freelance si "
+            "trovano scoperti a giugno."
         )
-
-    st.markdown("---")
-    st.markdown("### Forfettario o ordinario?")
-    raffronto = esame.confronto_regimi
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Netto in forfettario", euro(raffronto.netto_forfettario))
-    c2.metric("Netto in ordinario", euro(raffronto.netto_ordinario))
-    c3.metric(
-        "Differenza",
-        euro(abs(raffronto.differenza)),
-        delta=("forfettario" if raffronto.conviene == "forfettario" else "ordinario"),
-    )
-    st.info(raffronto.sintesi)
-
-    with st.expander("Come si compone il conto in regime ordinario"):
-        o = raffronto.esito_ordinario
-        righe_ord = [
-            ("Ricavi", o.ricavi),
-            ("− Costi deducibili", -o.costi),
-            ("= Reddito", o.reddito),
-            ("− Contributi (oneri deducibili)", -o.contributi_dovuti),
-            ("= Imponibile IRPEF", o.imponibile_irpef),
-            ("IRPEF lorda", o.irpef_lorda),
-            ("− Detrazione lavoro autonomo", -o.detrazione),
-            ("= IRPEF netta", o.irpef),
-            ("+ Addizionali", o.addizionali),
-        ]
+        piano = pd.DataFrame(
+            [
+                {
+                    "Anno": a.anno,
+                    "Ricavi": a.ricavi,
+                    "Imposta versata": a.imposta_cassa,
+                    "Contributi versati": a.contributi_cassa,
+                    "Uscite totali": a.uscite_cassa,
+                    "Resta in cassa": a.netto_di_cassa,
+                }
+                for a in esame.piano_cassa
+            ]
+        )
         st.dataframe(
-            pd.DataFrame(righe_ord, columns=["Voce", "Importo"]).style.format(
-                {"Importo": lambda v: euro(v, 2)}
-            ),
+            piano.style.format({c: lambda v: euro(v) for c in piano.columns if c != "Anno"}),
             hide_index=True,
             width="stretch",
         )
-        st.caption(f"Aliquota marginale: {percentuale(o.aliquota_marginale, 0)}")
-        for nota in o.note:
-            st.caption(nota)
+        st.caption("Il piano simula una nuova apertura e parametri annuali costanti. "
+                   "Con meno di 12 mesi assume apertura a inizio del mese 13 meno i mesi "
+                   "indicati; negli anni successivi considera 12 mesi. Le rate del quarto "
+                   "trimestre INPS sono pagate a febbraio successivo.")
+        for a in esame.piano_cassa:
+            with st.expander(f"Dettaglio {a.anno}"):
+                for d in a.dettaglio:
+                    st.write("· " + d)
 
-    if raffronto.costi_di_pareggio:
-        curva = []
-        passo = max(500, int(esame.ricavi_totali / 40)) if esame.ricavi_totali else 500
-        for costo in range(0, int(esame.ricavi_totali) + 1, passo):
-            c = mod_confronto.confronta(
+        st.markdown("---")
+        st.markdown("### Quanto devo fatturare per portare a casa una cifra?")
+        obiettivo = st.number_input(
+            "Netto desiderato all'anno (€)", min_value=0, max_value=200_000, value=30_000, step=1_000
+        )
+        if obiettivo:
+            necessari = forfettario.ricavi_per_netto_obiettivo(
+                float(obiettivo) + profilo.costi_annui + esame.iva_estera_annua,
                 forfettario.Situazione(
-                    ricavi=esame.ricavi_totali,
+                    ricavi=esame.ricavi_totali or 1.0,
                     coefficiente=esame.coefficiente_medio,
                     gestione=esame.gestione,
                     startup=esame.esito_forfettario.aliquota == P.ALIQUOTA_SOSTITUTIVA_STARTUP,
                     riduzione=e.contributi.riduzione_applicata,
                     mesi_attivita=mesi,
                 ),
-                costi=float(costo),
-                iva_indetraibile=esame.iva_estera_annua,
             )
-            curva.append(
-                {"Costi reali": costo, "Forfettario": c.netto_forfettario, "Ordinario": c.netto_ordinario}
+            st.success(
+                f"Per {euro(obiettivo)} netti ti servono circa **{euro(necessari)}** di ricavi, "
+                f"cioe' {euro(necessari / 12)} al mese."
             )
-        st.line_chart(pd.DataFrame(curva).set_index("Costi reali"))
-        st.caption(
-            f"Le due curve si incrociano a {euro(raffronto.costi_di_pareggio)} di costi: "
-            "oltre quel punto il forfettario ti fa perdere soldi."
-        )
-
-    st.markdown("---")
-    st.markdown("### I primi tre anni di cassa")
-    st.caption(
-        "Competenza e cassa non coincidono: il primo anno si versa poco, il secondo "
-        "arrivano insieme saldo e acconti. E' il motivo per cui tanti freelance si "
-        "trovano scoperti a giugno."
-    )
-    piano = pd.DataFrame(
-        [
-            {
-                "Anno": a.anno,
-                "Ricavi": a.ricavi,
-                "Imposta versata": a.imposta_cassa,
-                "Contributi versati": a.contributi_cassa,
-                "Uscite totali": a.uscite_cassa,
-                "Resta in cassa": a.netto_di_cassa,
-            }
-            for a in esame.piano_cassa
-        ]
-    )
-    st.dataframe(
-        piano.style.format({c: lambda v: euro(v) for c in piano.columns if c != "Anno"}),
-        hide_index=True,
-        width="stretch",
-    )
-    st.caption("Il piano simula una nuova apertura e parametri annuali costanti. "
-               "Con meno di 12 mesi assume apertura a inizio del mese 13 meno i mesi "
-               "indicati; negli anni successivi considera 12 mesi. Le rate del quarto "
-               "trimestre INPS sono pagate a febbraio successivo.")
-    for a in esame.piano_cassa:
-        with st.expander(f"Dettaglio {a.anno}"):
-            for d in a.dettaglio:
-                st.write("· " + d)
-
-    st.markdown("---")
-    st.markdown("### Quanto devo fatturare per portare a casa una cifra?")
-    obiettivo = st.number_input(
-        "Netto desiderato all'anno (€)", min_value=0, max_value=200_000, value=30_000, step=1_000
-    )
-    if obiettivo:
-        necessari = forfettario.ricavi_per_netto_obiettivo(
-            float(obiettivo) + profilo.costi_annui + esame.iva_estera_annua,
-            forfettario.Situazione(
-                ricavi=esame.ricavi_totali or 1.0,
-                coefficiente=esame.coefficiente_medio,
-                gestione=esame.gestione,
-                startup=esame.esito_forfettario.aliquota == P.ALIQUOTA_SOSTITUTIVA_STARTUP,
-                riduzione=e.contributi.riduzione_applicata,
-                mesi_attivita=mesi,
-            ),
-        )
-        st.success(
-            f"Per {euro(obiettivo)} netti ti servono circa **{euro(necessari)}** di ricavi, "
-            f"cioe' {euro(necessari / 12)} al mese."
-        )
-        if necessari > P.SOGLIA_RICAVI:
-            st.warning(
-                f"Sono oltre il limite di {euro(P.SOGLIA_RICAVI)} del forfettario: "
-                "quell'obiettivo richiede un altro regime."
-            )
+            if necessari > P.SOGLIA_RICAVI:
+                st.warning(
+                    f"Sono oltre il limite di {euro(P.SOGLIA_RICAVI)} del forfettario: "
+                    "quell'obiettivo richiede un altro regime."
+                )
 
 # ---------------------------------------------------------------------------
 # TAB 3 - IVA E PIATTAFORME
@@ -732,21 +786,25 @@ with tab_conti:
             st.progress(min(1.0, soglia.percentuale))
             st.caption(f"{soglia.descrizione} {soglia.conseguenza}")
 
-        accantonamento = registro.accantonamento(
-            forfettario.Situazione(
-                ricavi=max(registro.incassi, 1.0),
-                coefficiente=esame.coefficiente_medio,
-                gestione=esame.gestione,
-                startup=esame.esito_forfettario.aliquota == P.ALIQUOTA_SOSTITUTIVA_STARTUP,
-                riduzione=e.contributi.riduzione_applicata,
-                mesi_attivita=mesi,
+        if esame.stima_utilizzabile:
+            accantonamento = registro.accantonamento(
+                forfettario.Situazione(
+                    ricavi=max(registro.incassi, 1.0),
+                    coefficiente=esame.coefficiente_medio,
+                    gestione=esame.gestione,
+                    startup=esame.esito_forfettario.aliquota == P.ALIQUOTA_SOSTITUTIVA_STARTUP,
+                    riduzione=e.contributi.riduzione_applicata,
+                    mesi_attivita=mesi,
+                )
             )
-        )
-        st.markdown("#### Accantonamento")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Quota su ogni incasso", percentuale(accantonamento["quota_su_ogni_incasso"]))
-        c2.metric("Da avere gia' da parte", euro(accantonamento["da_accantonare_ora"]))
-        c3.metric("IVA estera da versare", euro(accantonamento["iva_estera_da_versare"], 2))
+            st.markdown("#### Accantonamento")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Quota su ogni incasso", percentuale(accantonamento["quota_su_ogni_incasso"]))
+            c2.metric("Da avere gia' da parte", euro(accantonamento["da_accantonare_ora"]))
+            c3.metric("IVA estera da versare", euro(accantonamento["iva_estera_da_versare"], 2))
+
+        else:
+            st.info("Accantonamento disponibile dopo la verifica della classificazione e della previdenza.")
 
         st.markdown("#### Movimenti")
         st.dataframe(
@@ -784,39 +842,42 @@ with tab_conti:
 # ---------------------------------------------------------------------------
 
 with tab_scadenze:
-    st.markdown("### Le tue scadenze")
-    st.caption("Filtrate in base al regime, alla cassa previdenziale e alle operazioni estere.")
+    if not esame.stima_utilizzabile:
+        st.info("Completa la verifica della posizione prima di usare uno scadenzario personalizzato.")
+    else:
+        st.markdown("### Le tue scadenze")
+        st.caption("Filtrate in base al regime, alla cassa previdenziale e alle operazioni estere.")
 
-    profilo_scadenze = scadenze.Profilo(
-        regime="forfettario",
-        gestione=esame.gestione,
-        acquisti_esteri=acquisti_esteri > 0,
-        vendite_ue_b2b=clienti_esteri,
-        riduzione_contributiva_da_chiedere=esame.gestione in previdenza.GESTIONI_IMPRESA,
-        oss=vendite_privati_ue > P.SOGLIA_OSS,
-    )
+        profilo_scadenze = scadenze.Profilo(
+            regime="forfettario",
+            gestione=esame.gestione,
+            acquisti_esteri=acquisti_esteri > 0,
+            vendite_ue_b2b=clienti_esteri,
+            riduzione_contributiva_da_chiedere=esame.gestione in previdenza.GESTIONI_IMPRESA,
+            oss=vendite_privati_ue > P.SOGLIA_OSS,
+        )
 
-    st.markdown("#### Prossime")
-    for s in scadenze.prossime(6, profilo=profilo_scadenze):
-        giorni = s.giorni_mancanti()
-        etichetta = "oggi" if giorni == 0 else f"tra {giorni} giorni"
-        with st.container():
-            st.markdown(f"**{s.data.strftime('%d/%m/%Y')}** · {s.titolo} — _{etichetta}_")
-            st.caption(f"{s.categoria} · {s.descrizione}")
+        st.markdown("#### Prossime")
+        for s in scadenze.prossime(6, profilo=profilo_scadenze):
+            giorni = s.giorni_mancanti()
+            etichetta = "oggi" if giorni == 0 else f"tra {giorni} giorni"
+            with st.container():
+                st.markdown(f"**{s.data.strftime('%d/%m/%Y')}** · {s.titolo} — _{etichetta}_")
+                st.caption(f"{s.categoria} · {s.descrizione}")
 
-    st.markdown("---")
-    st.markdown(f"#### Calendario {P.ANNO_IMPOSTA}")
-    tutte = scadenze.calendario(P.ANNO_IMPOSTA, profilo_scadenze)
-    categorie = sorted({s.categoria for s in tutte})
-    filtro = st.multiselect("Categorie", categorie, default=categorie)
-    calendario_df = pd.DataFrame(
-        [
-            {"Data": s.data, "Scadenza": s.titolo, "Categoria": s.categoria, "Dettaglio": s.descrizione}
-            for s in tutte
-            if s.categoria in filtro
-        ]
-    )
-    st.dataframe(calendario_df, hide_index=True, width="stretch", height=420)
+        st.markdown("---")
+        st.markdown(f"#### Calendario {P.ANNO_IMPOSTA}")
+        tutte = scadenze.calendario(P.ANNO_IMPOSTA, profilo_scadenze)
+        categorie = sorted({s.categoria for s in tutte})
+        filtro = st.multiselect("Categorie", categorie, default=categorie)
+        calendario_df = pd.DataFrame(
+            [
+                {"Data": s.data, "Scadenza": s.titolo, "Categoria": s.categoria, "Dettaglio": s.descrizione}
+                for s in tutte
+                if s.categoria in filtro
+            ]
+        )
+        st.dataframe(calendario_df, hide_index=True, width="stretch", height=420)
 
 # ---------------------------------------------------------------------------
 # TAB 6 - CATALOGO
@@ -833,11 +894,13 @@ with tab_catalogo:
             {
                 "Professione": p.nome,
                 "Ambito": p.categoria,
-                "ATECO": p.ateco or "—",
+                "ATECO proposto": p.ateco or "Da scegliere",
+                "Criterio di scelta": p.verifica["criterio"],
+                "Scenari alternativi": ", ".join(p.codici_scenario),
                 "Descrizione ATECO": p.ateco_descrizione,
                 "Coefficiente": f"{p.coefficiente_pct}%",
                 "Previdenza": p.gestione_label,
-                "Camera di Commercio": "Sì" if p.camera_commercio else "No",
+                "Camera di Commercio (scenario)": "Da verificare" if p.gestione_inps == professioni.DIPENDE else ("Sì" if p.camera_commercio else "No"),
             }
             for p in professioni.CATALOGO
         ]

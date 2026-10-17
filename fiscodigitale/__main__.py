@@ -50,6 +50,9 @@ def main(argv: list[str] | None = None) -> int:
                              "prosecuzione e verifica dei ricavi in caso di subentro")
     parser.add_argument("--non-startup", action="store_true",
                         help="non applicare l'aliquota agevolata al 5 per cento")
+    parser.add_argument("--ateco", help="codice di uno degli scenari previsti per l'attivita'")
+    parser.add_argument("--escludi-fpls", action="store_true", help="conferma l'esclusione del FPLS dopo verifica delle mansioni")
+    parser.add_argument("--verifica-specialistica-confermata", action="store_true", help="conferma la verifica dei contratti richiesta nella scheda")
     parser.add_argument("--elenco", action="store_true", help="elenca tutte le professioni")
     args = parser.parse_args(argv)
 
@@ -91,6 +94,9 @@ def main(argv: list[str] | None = None) -> int:
             prima_attivita=args.startup_confermata and not args.non_startup,
             requisiti_startup_confermati=args.startup_confermata and not args.non_startup,
             natura_attivita=args.natura,
+            codice_ateco=args.ateco,
+            prestazioni_spettacolo=False if args.escludi_fpls else None,
+            verifica_specialistica_confermata=args.verifica_specialistica_confermata,
             altre_attivita=tuple(altre),
         )
     )
@@ -108,6 +114,10 @@ def main(argv: list[str] | None = None) -> int:
     for v in esito.verifiche:
         simbolo = {"ok": "[ok]", "attenzione": "[!]", "bloccante": "[X]"}[v.esito]
         print(f"{simbolo} {v.nome}: {v.messaggio}")
+
+    if not esito.stima_utilizzabile:
+        print("\nCompleta classificazione e previdenza: netto, confronto e piano non disponibili.")
+        return 2
 
     _riga("Numeri")
     e = esito.esito_forfettario
