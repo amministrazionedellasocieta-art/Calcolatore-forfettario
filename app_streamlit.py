@@ -16,6 +16,7 @@ import streamlit as st
 from fiscodigitale import (
     confronto as mod_confronto,
     prova_fcc,
+    interfaccia_fcc,
     contabilita,
     diagnosi,
     forfettario,
@@ -30,8 +31,10 @@ st.set_page_config(
     page_title="Fisco Chiaro | Simulatore forfettario",
     page_icon="🧭",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
+
+interfaccia_fcc.applica()
 
 EURO = "€ {:,.0f}"
 COLORI_ESITO = {diagnosi.OK: "✅", diagnosi.ATTENZIONE: "⚠️", diagnosi.BLOCCANTE: "⛔"}
@@ -49,7 +52,9 @@ def percentuale(valore: float, decimali: int = 1) -> str:
 # SIDEBAR: il profilo di lavoro
 # ---------------------------------------------------------------------------
 
-st.sidebar.title("🧭 Il tuo profilo")
+st.sidebar.image(str(interfaccia_fcc.LOGO), width=135)
+st.sidebar.title("Il tuo profilo")
+st.sidebar.caption("1. Attività · 2. Ricavi e costi · 3. Verifiche")
 
 ricerca = st.sidebar.text_input(
     "Che lavoro fai?",
@@ -76,10 +81,7 @@ scelta = st.sidebar.selectbox(
 
 natura = None
 if scelta.gestione_inps == professioni.DIPENDE:
-    st.sidebar.warning(
-        "Per questo lavoro l'inquadramento non e' scontato: cambia la cassa "
-        "previdenziale e i contributi dovuti."
-    )
+    st.sidebar.caption("La forma con cui lavori determina la gestione previdenziale. Se hai dubbi, lascia la scelta da verificare.")
     natura = st.sidebar.radio(
         "Come eserciti l'attivita'?",
         (diagnosi.PROFESSIONALE, diagnosi.IMPRESA),
@@ -283,23 +285,17 @@ except ValueError as errore:
 # TESTATA
 # ---------------------------------------------------------------------------
 
-st.title("Fisco Chiaro Consulting")
-st.caption(
-    f"Fiscalita' e contabilita' dei lavori digitali · anno d'imposta {P.ANNO_IMPOSTA} · "
-    f"{len(professioni.CATALOGO)} professioni mappate"
-)
-
-st.caption("Simulatore forfettario · Versione di prova per la revisione dello Studio")
+interfaccia_fcc.testata()
 
 tab_cliente, tab_diagnosi, tab_numeri, tab_iva, tab_conti, tab_scadenze, tab_catalogo = st.tabs(
     [
         "Il tuo risultato",
-        "🩺 Diagnosi",
-        "🧮 Numeri e confronto",
-        "🌍 IVA e piattaforme",
-        "📒 Contabilita'",
-        "📅 Scadenze",
-        "📚 Catalogo",
+        "Verifiche",
+        "Numeri e confronto",
+        "IVA e piattaforme",
+        "Incassi e spese",
+        "Scadenze",
+        "Attività e codici",
     ]
 )
 
@@ -308,8 +304,8 @@ tab_cliente, tab_diagnosi, tab_numeri, tab_iva, tab_conti, tab_scadenze, tab_cat
 # ---------------------------------------------------------------------------
 
 with tab_cliente:
-    st.subheader("Una prima fotografia della tua attivita")
-    st.write("Compila il profilo a sinistra. Qui trovi la stima e i punti da approfondire con lo Studio.")
+    st.subheader("Il punto sulla tua attività")
+    st.caption("Risultati basati sui dati del profilo. Puoi aggiornarli in qualsiasi momento.")
     if esame.stima_utilizzabile:
         c1, c2, c3 = st.columns(3)
         c1.metric("Ricavi previsti", euro(profilo.ricavi_totali))
@@ -323,12 +319,11 @@ with tab_cliente:
     if punti:
         st.markdown("**Da chiarire con lo Studio**")
         for v in punti:
-            st.write(f"• {v.nome}: {v.messaggio}")
+            st.write(f"• {v.nome}")
+        st.caption("Nella scheda Verifiche trovi i dettagli. Se hai dubbi sulle risposte, lo Studio può aiutarti a completarli.")
     else:
         st.write("Le verifiche automatiche sono complete sui dati dichiarati. Lo Studio potra confermare l'inquadramento.")
-    st.markdown("**Il prossimo passo**")
-    st.write("Scarica il riepilogo e riportalo nel modulo di richiesta dello Studio. "
-             "Il pulsante apre il sito ufficiale, dove puoi scegliere come essere ricontattato.")
+    st.markdown('<div class="fcc-next"><strong>Dalla stima a una scelta consapevole.</strong><p>Conserva il riepilogo e raccontaci cosa vuoi approfondire. Lo Studio potrà valutare il tuo caso.</p></div>', unsafe_allow_html=True)
     st.download_button("Scarica il riepilogo per lo Studio", prova_fcc.riepilogo(profilo, esame),
                        file_name="riepilogo-fisco-chiaro.txt", mime="text/plain")
     st.link_button("Richiedi una consulenza a Fisco Chiaro", prova_fcc.URL_CONSULENZA, type="primary")

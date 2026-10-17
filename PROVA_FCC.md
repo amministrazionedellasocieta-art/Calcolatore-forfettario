@@ -43,3 +43,13 @@ Nel primo caso il disponibile sottrae anche 220 euro di IVA indetraibile. Attivi
 - I movimenti restano nella sessione Streamlit e non sono un archivio persistente dello Studio.
 
 Verifica locale: **192 test superati**, nessuno saltato, inclusi 10 test che eseguono l'app Streamlit. La prova resta da sottoporre alla revisione professionale dello Studio prima di distribuirla ai clienti.
+
+
+## Interfaccia FCC
+
+Logo originale del sito ufficiale, conservato senza modifiche in `assets/fcc-logo-original.webp`:
+https://portale.fiscochiaroconsulting.it/home-assets/2026-08-11/fcc-logo-original.webp
+
+Palette ripresa dal sito: blu #0a1628, verde #147f7b, oro #d4a843, fondo #f8f6f1. La vista presenta tre passaggi, schede risultato e pulsante consulenza. Sul telefono il profilo si apre dal menu e i risultati si dispongono in verticale. I dettagli tecnici rimangono nelle schede dedicate; la schermata cliente elenca le verifiche mancanti senza mostrare confronti economici ipotetici.
+
+Verificata la resa nel browser a 1440 e 390 pixel di larghezza, senza allargamento orizzontale della pagina. I tab restano scorribili orizzontalmente. Le modifiche riguardano la presentazione; nessuna nuova pubblicazione o integrazione CRM.
