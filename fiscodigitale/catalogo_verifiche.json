@@ -1,0 +1,642 @@
+{
+  "data_verifica": "2026-10-17",
+  "fonti": {
+    "struttura": "https://www.istat.it/wp-content/uploads/2025/02/StrutturaATECO-2025-IT-EN-DE.xlsx",
+    "note": "https://www.istat.it/wp-content/uploads/2025/03/Note-esplicative-ATECO-2025-italiano-inglese.xlsx",
+    "raccordo": "https://www.istat.it/wp-content/uploads/2026/07/Aggiornamento-2026-Tavola-raccordo-bidirezionale-ATECO-2025-ATECO-2022-italiano.xlsx",
+    "coefficienti": "https://www.normattiva.it/eli/id/2025/06/12/25G00090/CONSOLIDATED/20260330",
+    "previdenza": "https://www.inps.it/content/dam/inps-site/it/scorporati/circolari-e-messaggi/2025/02/Circolare_14835/Allegati/15927_Circolare-numero-44-del-19-02-2025.pdf"
+  },
+  "sha256_fonti": {
+    "note.xlsx": "7e1da965f6ff6b2b27f12d91b48188e19f095ca50e5f61ee5cb83a13e05324ae",
+    "raccordo.xlsx": "faf4530a869f1e3d6b68f464520dcddd691f4565d17e92e3988370cf3c808673",
+    "struttura.xlsx": "65db6395b95860c42f8808bae6b606c87b5cddf1f402aa5e28fc4faf85c39df0"
+  },
+  "codici": {
+    "73.11.03": {
+      "titolo": "Attività di influencer marketing",
+      "ateco_2007_2022_scenario": "73.11.02",
+      "gruppo_coefficiente": "professionale"
+    },
+    "59.11.00": {
+      "titolo": "Attività di produzione cinematografica, di video e programmi televisivi",
+      "ateco_2007_2022_scenario": "59.11.00",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "59.20.10": {
+      "titolo": "Attività di registrazione sonora",
+      "ateco_2007_2022_scenario": "59.20.30",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "59.12.00": {
+      "titolo": "Attività di post-produzione cinematografica, di video e programmi televisivi",
+      "ateco_2007_2022_scenario": "59.12.00",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "74.20.19": {
+      "titolo": "Altre attività fotografiche specializzate",
+      "ateco_2007_2022_scenario": "74.20.19",
+      "gruppo_coefficiente": "professionale"
+    },
+    "74.20.11": {
+      "titolo": "Attività fotografiche fornite da fotoreporter",
+      "ateco_2007_2022_scenario": "74.20.11",
+      "gruppo_coefficiente": "professionale"
+    },
+    "74.20.20": {
+      "titolo": "Attività di sviluppo e stampa e altre attività fotografiche",
+      "ateco_2007_2022_scenario": "74.20.20",
+      "gruppo_coefficiente": "professionale"
+    },
+    "90.11.09": {
+      "titolo": "Altre attività di creazione letteraria e composizione musicale",
+      "ateco_2007_2022_scenario": "90.03.09",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "58.11.00": {
+      "titolo": "Edizione di libri",
+      "ateco_2007_2022_scenario": "58.11.00",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "93.19.99": {
+      "titolo": "Altre attività sportive varie n.c.a.",
+      "ateco_2007_2022_scenario": "93.29.90",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "62.10.00": {
+      "titolo": "Attività di programmazione informatica",
+      "ateco_2007_2022_scenario": "62.01.00",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "62.20.10": {
+      "titolo": "Attività di consulenza informatica",
+      "ateco_2007_2022_scenario": "62.02.00",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "63.10.29": {
+      "titolo": "Elaborazione altri dati",
+      "ateco_2007_2022_scenario": "63.11.19",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "70.20.09": {
+      "titolo": "Consulenza imprenditoriale e altre attività di consulenza gestionale n.c.a.",
+      "ateco_2007_2022_scenario": "70.22.09",
+      "gruppo_coefficiente": "professionale"
+    },
+    "74.12.01": {
+      "titolo": "Grafica di pagine web",
+      "ateco_2007_2022_scenario": "74.10.21",
+      "gruppo_coefficiente": "professionale"
+    },
+    "74.12.09": {
+      "titolo": "Altre attività di progettazione grafica e di comunicazione visiva",
+      "ateco_2007_2022_scenario": "74.10.29",
+      "gruppo_coefficiente": "professionale"
+    },
+    "90.12.00": {
+      "titolo": "Attività di creazione di arti visive",
+      "ateco_2007_2022_scenario": "90.03.09",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "73.11.02": {
+      "titolo": "Conduzione di campagne di marketing e altri servizi pubblicitari",
+      "ateco_2007_2022_scenario": "73.11.02",
+      "gruppo_coefficiente": "professionale"
+    },
+    "73.11.01": {
+      "titolo": "Ideazione di campagne pubblicitarie",
+      "ateco_2007_2022_scenario": "73.11.01",
+      "gruppo_coefficiente": "professionale"
+    },
+    "47.40.10": {
+      "titolo": "Commercio al dettaglio di computer, unità periferiche e software",
+      "ateco_2007_2022_scenario": "47.91.10",
+      "gruppo_coefficiente": "commercio"
+    },
+    "47.61.00": {
+      "titolo": "Commercio al dettaglio di libri",
+      "ateco_2007_2022_scenario": "47.91.10",
+      "gruppo_coefficiente": "commercio"
+    },
+    "47.64.00": {
+      "titolo": "Commercio al dettaglio di giochi e giocattoli",
+      "ateco_2007_2022_scenario": "47.91.10",
+      "gruppo_coefficiente": "commercio"
+    },
+    "47.71.10": {
+      "titolo": "Commercio al dettaglio di articoli di abbigliamento per adulti",
+      "ateco_2007_2022_scenario": "47.91.10",
+      "gruppo_coefficiente": "commercio"
+    },
+    "47.12.90": {
+      "titolo": "Commercio al dettaglio non specializzato di altri prodotti n.c.a.",
+      "ateco_2007_2022_scenario": "47.91.10",
+      "gruppo_coefficiente": "commercio"
+    },
+    "85.59.20": {
+      "titolo": "Corsi di formazione e corsi di aggiornamento professionale",
+      "ateco_2007_2022_scenario": "85.59.20",
+      "gruppo_coefficiente": "professionale"
+    },
+    "58.19.00": {
+      "titolo": "Altre attività editoriali, esclusa l'edizione di software",
+      "ateco_2007_2022_scenario": "58.19.00",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "58.29.00": {
+      "titolo": "Edizione di altri software",
+      "ateco_2007_2022_scenario": "58.29.00",
+      "gruppo_coefficiente": "altre_attivita"
+    },
+    "85.59.99": {
+      "titolo": "Tutti gli altri servizi vari di istruzione e formazione n.c.a.",
+      "ateco_2007_2022_scenario": "85.59.90",
+      "gruppo_coefficiente": "professionale"
+    },
+    "85.59.10": {
+      "titolo": "Corsi di lingua straniera",
+      "ateco_2007_2022_scenario": "85.59.30",
+      "gruppo_coefficiente": "professionale"
+    },
+    "74.30.00": {
+      "titolo": "Attività di traduzione e interpretariato",
+      "ateco_2007_2022_scenario": "74.30.00",
+      "gruppo_coefficiente": "professionale"
+    },
+    "82.10.00": {
+      "titolo": "Attività amministrative e di supporto per le funzioni di ufficio",
+      "ateco_2007_2022_scenario": "82.11.01",
+      "gruppo_coefficiente": "altre_attivita"
+    }
+  },
+  "attivita": {
+    "influencer": {
+      "codice_proposto": "73.11.03",
+      "scenari": [
+        "73.11.03"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": true,
+      "possibile_fpls": true,
+      "criterio": "L'influencer non e' automaticamente commerciante. Verificare organizzazione e prestazione; nei casi previsti puo' rilevare anche il Fondo Spettacolo (INPS 44/2025)."
+    },
+    "youtuber": {
+      "codice_proposto": "59.11.00",
+      "scenari": [
+        "59.11.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": true,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "streamer": {
+      "codice_proposto": "59.11.00",
+      "scenari": [
+        "59.11.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": true,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "onlyfans": {
+      "codice_proposto": "59.11.00",
+      "scenari": [
+        "59.11.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": true,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "podcaster": {
+      "codice_proposto": "59.20.10",
+      "scenari": [
+        "59.20.10"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": true,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "videomaker": {
+      "codice_proposto": "59.12.00",
+      "scenari": [
+        "59.12.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": true,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "fotografo": {
+      "codice_proposto": "74.20.19",
+      "scenari": [
+        "74.20.19",
+        "74.20.11",
+        "74.20.20"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": true,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "musicista-digitale": {
+      "codice_proposto": "90.11.09",
+      "scenari": [
+        "90.11.09",
+        "59.20.10"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": true,
+      "possibile_fpls": true,
+      "criterio": "Composizione musicale, registrazione, esecuzioni artistiche e diritti d'autore seguono qualificazioni diverse. Il motore ordinario non calcola automaticamente royalties o FPLS."
+    },
+    "scrittore-self": {
+      "codice_proposto": "58.11.00",
+      "scenari": [
+        "58.11.00",
+        "90.11.09"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": true,
+      "possibile_fpls": false,
+      "criterio": "58.11.00 comprende pubblicazione in proprio; la mera creazione letteraria e i proventi da diritto d'autore richiedono qualificazione distinta."
+    },
+    "esports": {
+      "codice_proposto": "93.19.99",
+      "scenari": [
+        "93.19.99"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": true,
+      "possibile_fpls": false,
+      "criterio": "Il codice include gli eSport, ma il contratto puo' richiedere disciplina del lavoro sportivo o dello spettacolo: non bastano nome dell'attivita' e fatturato."
+    },
+    "sviluppatore-software": {
+      "codice_proposto": "62.10.00",
+      "scenari": [
+        "62.10.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "sviluppatore-app": {
+      "codice_proposto": "62.10.00",
+      "scenari": [
+        "62.10.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "consulente-it": {
+      "codice_proposto": "62.20.10",
+      "scenari": [
+        "62.20.10"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "cybersecurity": {
+      "codice_proposto": "62.20.10",
+      "scenari": [
+        "62.20.10"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "data-analyst": {
+      "codice_proposto": "62.10.00",
+      "scenari": [
+        "62.10.00",
+        "62.20.10",
+        "63.10.29",
+        "70.20.09"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Distinguere programmazione, consulenza IT, elaborazione altri dati e consulenza gestionale: il coefficiente puo' passare dal 67% al 78%."
+    },
+    "consulente-ai": {
+      "codice_proposto": "62.10.00",
+      "scenari": [
+        "62.10.00",
+        "62.20.10"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "62.10.00 vale per sviluppo software; la sola consulenza informatica e' 62.20.10. Il titolo prompt engineer non basta a stabilire il codice."
+    },
+    "blockchain-dev": {
+      "codice_proposto": "62.10.00",
+      "scenari": [
+        "62.10.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "no-code": {
+      "codice_proposto": "62.20.10",
+      "scenari": [
+        "62.20.10",
+        "62.10.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "game-dev": {
+      "codice_proposto": "62.10.00",
+      "scenari": [
+        "62.10.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "web-designer": {
+      "codice_proposto": "74.12.01",
+      "scenari": [
+        "74.12.01"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "graphic-designer": {
+      "codice_proposto": "74.12.09",
+      "scenari": [
+        "74.12.09"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "motion-designer": {
+      "codice_proposto": "74.12.09",
+      "scenari": [
+        "74.12.09",
+        "59.12.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": true,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "nft-artist": {
+      "codice_proposto": "90.12.00",
+      "scenari": [
+        "90.12.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": true,
+      "possibile_fpls": false,
+      "criterio": "Creazione di arte digitale, licenze e negoziazione di NFT sono fattispecie diverse; non estendere automaticamente il 67% a qualsiasi ricavo NFT."
+    },
+    "social-media-manager": {
+      "codice_proposto": "73.11.02",
+      "scenari": [
+        "73.11.02"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "ads-manager": {
+      "codice_proposto": "73.11.02",
+      "scenari": [
+        "73.11.02"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "seo-specialist": {
+      "codice_proposto": "73.11.02",
+      "scenari": [
+        "73.11.02"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "copywriter": {
+      "codice_proposto": "73.11.01",
+      "scenari": [
+        "73.11.01"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "affiliate-marketer": {
+      "codice_proposto": "73.11.02",
+      "scenari": [
+        "73.11.02"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": true,
+      "possibile_fpls": false,
+      "criterio": "Il 78% presuppone un servizio pubblicitario: un contratto di agenzia o intermediazione commerciale richiede codice, coefficiente e previdenza propri, anche Enasarco se applicabile."
+    },
+    "digital-strategist": {
+      "codice_proposto": "70.20.09",
+      "scenari": [
+        "70.20.09"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "email-marketer": {
+      "codice_proposto": "73.11.02",
+      "scenari": [
+        "73.11.02"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "ecommerce": {
+      "codice_proposto": "",
+      "scenari": [
+        "47.40.10",
+        "47.61.00",
+        "47.64.00",
+        "47.71.10",
+        "47.12.90"
+      ],
+      "scelta_necessaria": true,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Il canale Internet non determina piu' il codice: occorrono prodotto venduto e ruolo effettivo. Le opzioni coprono alcuni esempi di vendita in proprio, non ogni settore."
+    },
+    "dropshipping": {
+      "codice_proposto": "",
+      "scenari": [
+        "47.40.10",
+        "47.61.00",
+        "47.64.00",
+        "47.71.10",
+        "47.12.90"
+      ],
+      "scelta_necessaria": true,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Distinguere rivendita in nome proprio da intermediazione: le opzioni di commercio qui disponibili presuppongono acquisto e rivendita in proprio."
+    },
+    "amazon-fba": {
+      "codice_proposto": "",
+      "scenari": [
+        "47.40.10",
+        "47.61.00",
+        "47.64.00",
+        "47.71.10",
+        "47.12.90"
+      ],
+      "scelta_necessaria": true,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Amazon FBA e' un servizio logistico: il codice dipende dai beni venduti in proprio, non dalla piattaforma."
+    },
+    "print-on-demand": {
+      "codice_proposto": "",
+      "scenari": [
+        "47.71.10",
+        "74.12.09"
+      ],
+      "scelta_necessaria": true,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Vendita in proprio di abbigliamento e servizio di grafica hanno codici e coefficienti diversi. Royalties da licenza del disegno richiedono analisi separata."
+    },
+    "infoprodotti": {
+      "codice_proposto": "",
+      "scenari": [
+        "85.59.20",
+        "58.11.00",
+        "58.19.00",
+        "58.29.00"
+      ],
+      "scelta_necessaria": true,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Corsi, e-book e software non hanno un codice unico: scegliere il contenuto effettivamente prodotto. 58.29.00 riguarda software, non tutti i corsi automatizzati."
+    },
+    "formatore-online": {
+      "codice_proposto": "85.59.20",
+      "scenari": [
+        "85.59.20",
+        "85.59.99"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "tutor-online": {
+      "codice_proposto": "85.59.99",
+      "scenari": [
+        "85.59.99",
+        "85.59.10"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "coach": {
+      "codice_proposto": "",
+      "scenari": [
+        "70.20.09",
+        "85.59.99"
+      ],
+      "scelta_necessaria": true,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Consulenza aziendale e formazione sono scenari diversi. Il termine coach non giustifica un codice residuale dei servizi alla persona; i servizi sanitari sono esclusi."
+    },
+    "traduttore": {
+      "codice_proposto": "74.30.00",
+      "scenari": [
+        "74.30.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "virtual-assistant": {
+      "codice_proposto": "82.10.00",
+      "scenari": [
+        "82.10.00"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "recruiter": {
+      "codice_proposto": "70.20.09",
+      "scenari": [
+        "70.20.09"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": true,
+      "possibile_fpls": false,
+      "criterio": "70.20.09 copre consulenza sulle strategie HR; ricerca e selezione del personale o collocamento non sono automaticamente consulenza gestionale e possono richiedere autorizzazioni."
+    },
+    "project-manager": {
+      "codice_proposto": "70.20.09",
+      "scenari": [
+        "70.20.09"
+      ],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "trader-cripto": {
+      "codice_proposto": "",
+      "scenari": [],
+      "scelta_necessaria": false,
+      "verifica_specialistica": false,
+      "possibile_fpls": false,
+      "criterio": "Scenario di riferimento da confrontare con l'attivita' effettiva, i contratti e le note ISTAT. Il solo titolo professionale non determina la previdenza."
+    },
+    "consulente-cripto": {
+      "codice_proposto": "",
+      "scenari": [
+        "85.59.20",
+        "58.19.00"
+      ],
+      "scelta_necessaria": true,
+      "verifica_specialistica": true,
+      "possibile_fpls": false,
+      "criterio": "Le opzioni coprono solo formazione generale o pubblicazioni. Non classificano consulenza personalizzata in investimenti o cripto-attivita', da verificare anche ai fini delle riserve di legge."
+    }
+  }
+}
