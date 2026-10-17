@@ -89,7 +89,7 @@ class Soglia:
     @property
     def stato(self) -> str:
         pct = self.percentuale
-        if pct >= 1:
+        if self.valore_corrente > self.limite:
             return "superata"
         if pct >= 0.9:
             return "critica"
@@ -223,8 +223,9 @@ class Registro:
                 valore_corrente=self.incassi,
                 limite=P.SOGLIA_USCITA_IMMEDIATA,
                 descrizione="Oltre questo importo il regime decade nell'anno stesso.",
-                conseguenza="Dovrai applicare l'IVA su tutte le operazioni dell'anno, "
-                            "comprese quelle gia' fatturate.",
+                conseguenza="L'IVA decorre dall'operazione che determina il superamento "
+                            "e dalle successive. Per le imposte sui redditi, invece, "
+                            "si applicano le regole ordinarie per tutto l'anno.",
             ),
             Soglia(
                 nome="Vendite a privati UE (OSS)",
@@ -300,3 +301,4 @@ class Registro:
             "da_accantonare_ora": round(self.incassi * quota, 2),
             "iva_estera_da_versare": self.iva_reverse_charge_maturata,
         }
+

@@ -109,8 +109,9 @@ def detrazione_lavoro_autonomo(reddito_complessivo: float) -> float:
     if reddito <= P.DETRAZIONE_AUTONOMI_SOGLIA_INTERMEDIA:
         residuo = P.DETRAZIONE_AUTONOMI_SOGLIA_INTERMEDIA - reddito
         ampiezza = P.DETRAZIONE_AUTONOMI_SOGLIA_INTERMEDIA - P.DETRAZIONE_AUTONOMI_SOGLIA_PIENA
+        bonus = 50.0 if 11_000 < reddito <= 17_000 else 0.0  # art. 13 c. 5-ter
         return round(
-            P.DETRAZIONE_AUTONOMI_BASE_INTERMEDIA
+            bonus + P.DETRAZIONE_AUTONOMI_BASE_INTERMEDIA
             + P.DETRAZIONE_AUTONOMI_QUOTA_DECRESCENTE * residuo / ampiezza,
             2,
         )
@@ -217,3 +218,4 @@ def calcola(situazione: SituazioneOrdinario) -> EsitoOrdinario:
         scaglioni=dettaglio,
         note=tuple(note),
     )
+

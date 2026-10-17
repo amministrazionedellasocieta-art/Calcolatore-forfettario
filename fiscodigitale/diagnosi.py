@@ -93,7 +93,7 @@ class Profilo:
     professione: str
     ricavi_attesi: float
     costi_annui: float = 0.0
-    prima_attivita: bool = True
+    prima_attivita: bool = False
     mesi_attivita: int = 12
     gestione_scelta: str | None = None
     altre_attivita: tuple[AltraAttivita, ...] = ()
@@ -123,6 +123,7 @@ class Profilo:
     gia_assicurato_altrove: bool = False
     prima_iscrizione_2025: bool = False
     riduzione_richiesta: int = 0
+    requisiti_startup_confermati: bool = False
 
     def __post_init__(self) -> None:
         if self.ricavi_attesi < 0:
@@ -422,11 +423,16 @@ def _verifiche(profilo: Profilo, prof: professioni.Professione) -> tuple[Verific
 
     if profilo.prima_attivita:
         v.append(Verifica(
-            "Aliquota agevolata al 5%", OK,
-            f"Se non hai svolto la stessa attivita' nei 3 anni precedenti, per "
-            f"{P.ANNI_ALIQUOTA_STARTUP} anni l'imposta e' al "
-            f"{P.ALIQUOTA_SOSTITUTIVA_STARTUP * 100:.0f}% invece che al "
-            f"{P.ALIQUOTA_SOSTITUTIVA * 100:.0f}%.",
+            "Aliquota agevolata al 5%",
+            OK if profilo.requisiti_startup_confermati else ATTENZIONE,
+            "Il 5% richiede: nessuna attivita' artistica, professionale o d'impresa "
+            "nei tre anni precedenti, anche associata o familiare; nessuna mera "
+            "prosecuzione (salva la pratica obbligatoria); se si prosegue "
+            "un'attivita' altrui, verifica dei ricavi dell'anno precedente. "
+            "Vale nell'anno di inizio e nei quattro successivi. "
+            + ("Requisiti dichiarati confermati: simulazione al 5%."
+               if profilo.requisiti_startup_confermati else
+               "Requisiti non confermati: simulazione prudenziale al 15%."),
             "art. 1 c. 65 L. 190/2014",
         ))
 
@@ -617,14 +623,17 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
         ricavi=profilo.ricavi_totali,
         coefficiente=coefficiente,
         gestione=gestione,
-        startup=profilo.prima_attivita and not bloccato,
+        startup=profilo.prima_attivita and profilo.requisiti_startup_confermati and not bloccato,
         riduzione=riduzione,
         mesi_attivita=profilo.mesi_attivita,
         gia_assicurato=profilo.gia_assicurato_altrove,
     )
 
     esito = forfettario.calcola(situazione)
-    raffronto = confronto.confronta(situazione, profilo.costi_annui)
+    raffronto = confronto.confronta(
+        situazione, profilo.costi_annui,
+        iva_indetraibile=iva_estero.iva_reverse_charge(profilo.acquisti_servizi_esteri),
+    )
     piano = forfettario.piano_cassa(situazione, anni=3)
 
     costo_inquadramento = None
@@ -765,3 +774,4 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
         coefficiente_medio=round(coefficiente, 6),
         contributi_doppia_iscrizione=contributi_doppia,
     )
+

@@ -36,6 +36,22 @@ class TestApp(unittest.TestCase):
         self.assert_senza_eccezioni(at)
         self.assertTrue(at.title)
 
+    def test_aliquota_startup_richiede_tutte_le_conferme(self):
+        at = self.avvia()
+        def casella(label):
+            return next(c for c in at.sidebar.checkbox if c.label.startswith(label))
+        self.assertFalse(casella("Sto avviando").value)
+        casella("Sto avviando").set_value(True).run()
+        self.assert_senza_eccezioni(at)
+        casella("Nei tre anni").set_value(True)
+        casella("Non e' mera").set_value(True)
+        at.run()
+        self.assertTrue(any("prudenziale al 15%" in x.value for x in at.markdown))
+        casella("Non proseguo").set_value(True).run()
+        self.assert_senza_eccezioni(at)
+        self.assertFalse(any("prudenziale al 15%" in x.value for x in at.markdown))
+        self.assertTrue(any("Requisiti dichiarati confermati" in x.value for x in at.markdown))
+
     def test_causa_di_esclusione(self):
         at = self.avvia()
         at.sidebar.number_input[4].set_value(50_000).run()  # redditi dipendente
@@ -66,3 +82,4 @@ class TestApp(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

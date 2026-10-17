@@ -22,11 +22,12 @@ class Confronto:
     esito_ordinario: ordinario.EsitoOrdinario
     costi_di_pareggio: float | None
     quota_costi_di_pareggio: float | None
+    iva_indetraibile: float = 0.0
 
     @property
     def netto_forfettario(self) -> float:
         """Netto reale: nel forfettario i costi si sostengono ma non si deducono."""
-        return round(self.esito_forfettario.netto - self.costi, 2)
+        return round(self.esito_forfettario.netto - self.costi - self.iva_indetraibile, 2)
 
     @property
     def netto_ordinario(self) -> float:
@@ -64,10 +65,18 @@ def confronta(
     situazione: forfettario.Situazione,
     costi: float = 0.0,
     *,
+    iva_indetraibile: float = 0.0,
     addizionale_regionale: float | None = None,
     addizionale_comunale: float | None = None,
 ) -> Confronto:
-    """Confronta i due regimi a parita' di ricavi e costi reali."""
+    """Confronta costi netti e ricavi uguali, con IVA estera extra solo al forfettario.
+
+    `costi` include i servizi esteri al netto dell'IVA da inversione contabile.
+    `iva_indetraibile` e' il costo aggiuntivo per il solo forfettario; nell'ordinario
+    si assume piena detraibilita'. Non e' un confronto dei prezzi B2C IVA inclusa.
+    """
+    if iva_indetraibile < 0:
+        raise ValueError("iva_indetraibile non puo' essere negativa")
     esito_f = forfettario.calcola(situazione)
 
     kwargs = {}
@@ -86,7 +95,7 @@ def confronta(
     )
     esito_o = ordinario.calcola(situazione_o)
 
-    pareggio = costi_di_pareggio(situazione, **kwargs)
+    pareggio = costi_di_pareggio(situazione, iva_indetraibile=iva_indetraibile, **kwargs)
     quota = (pareggio / situazione.ricavi) if (pareggio and situazione.ricavi) else None
 
     return Confronto(
@@ -95,6 +104,7 @@ def confronta(
         esito_forfettario=esito_f,
         esito_ordinario=esito_o,
         costi_di_pareggio=pareggio,
+        iva_indetraibile=iva_indetraibile,
         quota_costi_di_pareggio=round(quota, 4) if quota is not None else None,
     )
 
@@ -102,6 +112,7 @@ def confronta(
 def costi_di_pareggio(
     situazione: forfettario.Situazione,
     *,
+    iva_indetraibile: float = 0.0,
     addizionale_regionale: float | None = None,
     addizionale_comunale: float | None = None,
     tolleranza: float = 1.0,
@@ -110,13 +121,15 @@ def costi_di_pareggio(
 
     None se il forfettario resta migliore anche azzerando il reddito.
     """
+    if iva_indetraibile < 0:
+        raise ValueError("iva_indetraibile non puo' essere negativa")
     if situazione.ricavi <= 0:
         return None
 
     # A parita' di costi reali, il confronto si riduce al totale di imposte e
     # contributi: i costi si sostengono in entrambi i regimi, cambia solo se
     # sono deducibili.
-    dovuto_forfettario = forfettario.calcola(situazione).totale_dovuto
+    dovuto_forfettario = forfettario.calcola(situazione).totale_dovuto + iva_indetraibile
 
     kwargs = {}
     if addizionale_regionale is not None:
@@ -153,3 +166,4 @@ def costi_di_pareggio(
         else:
             alto = medio
     return round((basso + alto) / 2, 2)
+

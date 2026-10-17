@@ -102,10 +102,29 @@ costi = st.sidebar.number_input(
     max_value=300_000,
     value=6_000,
     step=500,
-    help="Attrezzatura, software, consulenze, pubblicita': nel forfettario non si "
+    help="Includi anche i costi dei servizi esteri, al netto dell'IVA da reverse charge "
+         "che viene aggiunta a parte. Attrezzatura, software, consulenze, pubblicita': nel forfettario non si "
          "deducono, ma li sostieni comunque.",
 )
-prima_attivita = st.sidebar.checkbox("Nuova attivita' (aliquota 5%)", value=True)
+prima_attivita = st.sidebar.checkbox("Sto avviando una nuova attivita'", value=False)
+requisiti_startup = False
+if prima_attivita:
+    with st.sidebar.expander("Verifica requisiti per il 5%", expanded=True):
+        nessuna_precedente = st.checkbox(
+            "Nei tre anni precedenti non ho esercitato attivita' artistica, "
+            "professionale o d'impresa, anche associata o familiare"
+        )
+        nessuna_prosecuzione = st.checkbox(
+            "Non e' mera prosecuzione di un precedente lavoro dipendente o "
+            "autonomo (salva la pratica professionale obbligatoria)"
+        )
+        ricavi_subentro = st.checkbox(
+            "Non proseguo un'attivita' altrui, oppure ho verificato che i suoi "
+            "ricavi dell'anno precedente rispettano il limite di legge"
+        )
+        requisiti_startup = nessuna_precedente and nessuna_prosecuzione and ricavi_subentro
+        st.caption("Il 5% vale nell'anno di inizio e nei quattro successivi. "
+                   "Finche' i requisiti non sono tutti confermati, la stima usa il 15%.")
 mesi = st.sidebar.slider("Mesi di attivita' nell'anno", 1, 12, 12)
 
 with st.sidebar.expander("Altre fonti di ricavo"):
@@ -191,6 +210,7 @@ profilo = diagnosi.Profilo(
     ricavi_attesi=float(ricavi),
     costi_annui=float(costi),
     prima_attivita=prima_attivita,
+    requisiti_startup_confermati=requisiti_startup,
     mesi_attivita=mesi,
     redditi_dipendente_anno_precedente=float(redditi_dipendente),
     partecipazioni_societarie=partecipazioni,
@@ -456,11 +476,12 @@ with tab_numeri:
                     ricavi=esame.ricavi_totali,
                     coefficiente=esame.coefficiente_medio,
                     gestione=esame.gestione,
-                    startup=prima_attivita,
+                    startup=esame.esito_forfettario.aliquota == P.ALIQUOTA_SOSTITUTIVA_STARTUP,
                     riduzione=e.contributi.riduzione_applicata,
                     mesi_attivita=mesi,
                 ),
                 costi=float(costo),
+                iva_indetraibile=esame.iva_estera_annua,
             )
             curva.append(
                 {"Costi reali": costo, "Forfettario": c.netto_forfettario, "Ordinario": c.netto_ordinario}
@@ -496,6 +517,10 @@ with tab_numeri:
         hide_index=True,
         width="stretch",
     )
+    st.caption("Il piano simula una nuova apertura e parametri annuali costanti. "
+               "Con meno di 12 mesi assume apertura a inizio del mese 13 meno i mesi "
+               "indicati; negli anni successivi considera 12 mesi. Le rate del quarto "
+               "trimestre INPS sono pagate a febbraio successivo.")
     for a in esame.piano_cassa:
         with st.expander(f"Dettaglio {a.anno}"):
             for d in a.dettaglio:
@@ -513,7 +538,7 @@ with tab_numeri:
                 ricavi=esame.ricavi_totali or 1.0,
                 coefficiente=esame.coefficiente_medio,
                 gestione=esame.gestione,
-                startup=prima_attivita,
+                startup=esame.esito_forfettario.aliquota == P.ALIQUOTA_SOSTITUTIVA_STARTUP,
                 riduzione=e.contributi.riduzione_applicata,
                 mesi_attivita=mesi,
             ),
@@ -712,7 +737,7 @@ with tab_conti:
                 ricavi=max(registro.incassi, 1.0),
                 coefficiente=esame.coefficiente_medio,
                 gestione=esame.gestione,
-                startup=prima_attivita,
+                startup=esame.esito_forfettario.aliquota == P.ALIQUOTA_SOSTITUTIVA_STARTUP,
                 riduzione=e.contributi.riduzione_applicata,
                 mesi_attivita=mesi,
             )
@@ -851,3 +876,4 @@ with st.expander("Fonti e limiti dello strumento"):
         "commercialista. L'inquadramento corretto dipende da come l'attivita' e' "
         "organizzata in concreto, e i codici ATECO vanno confermati caso per caso."
     )
+

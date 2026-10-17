@@ -170,7 +170,9 @@ def calcola(situazione: Situazione) -> Esito:
     if s.ricavi > P.SOGLIA_USCITA_IMMEDIATA:
         avvisi.append(
             f"Ricavi oltre {formato.numero(P.SOGLIA_USCITA_IMMEDIATA, 0)} euro: il regime decade "
-            "immediatamente, con IVA dovuta gia' su tutte le operazioni dell'anno."
+            "immediatamente nell'anno stesso. L'IVA decorre dall'operazione che determina il "
+            "superamento e dalle successive; ai fini dei redditi si applicano "
+            "le regole ordinarie per tutto l'anno."
         )
     elif s.ricavi > P.SOGLIA_RICAVI:
         avvisi.append(
@@ -197,8 +199,8 @@ def calcola(situazione: Situazione) -> Esito:
     if s.startup:
         note.append(
             f"Aliquota agevolata al {P.ALIQUOTA_SOSTITUTIVA_STARTUP * 100:.0f}%: vale per "
-            f"{P.ANNI_ALIQUOTA_STARTUP} anni dall'apertura, se non hai svolto la stessa "
-            "attivita' nei 3 anni precedenti."
+            f"l'anno di apertura e i {P.ANNI_ALIQUOTA_STARTUP - 1} successivi, solo se "
+            "sono verificati tutti i requisiti dell'art. 1 c. 65 L. 190/2014."
         )
     if s.mesi_attivita != 12:
         note.append(
@@ -322,16 +324,20 @@ def piano_cassa(
     acconti_versati_prec = 0.0
     variabile_prec = variabile_prec2 = 0.0
     credito_imposta = 0.0  # acconti versati in eccesso, riportati in avanti
+    fisso_rinviato = 0.0
 
     for indice in range(anni):
         ricavi = situazione.ricavi * ((1 + crescita) ** indice)
 
+        # Il primo anno si assume apertura a inizio del mese 13 - mesi_attivita.
+        # Negli anni successivi l'attivita' prosegue per dodici mesi.
+        mesi = situazione.mesi_attivita if indice == 0 else 12
         # 1. I contributi di competenza dipendono solo dal reddito forfetario.
         competenza = previdenza.calcola(
             ricavi * situazione.coefficiente,
             gestione=situazione.gestione,
             riduzione=situazione.riduzione,
-            mesi_attivita=situazione.mesi_attivita,
+            mesi_attivita=mesi,
             gia_assicurato=situazione.gia_assicurato,
         )
 
@@ -339,12 +345,18 @@ def piano_cassa(
         saldo_contributi = max(0.0, variabile_prec - variabile_prec2 * quota_acconto_contributi)
         acconto_contributi = variabile_prec * quota_acconto_contributi
         contributi_cassa = saldo_contributi + acconto_contributi
+        fisso_cassa = 0.0
         if gestione_impresa:
-            # La quota fissa si versa in quattro rate nell'anno di competenza.
-            contributi_cassa += competenza.quota_fissa
+            # I mesi di ottobre-dicembre si pagano a febbraio dell'anno dopo.
+            rinvio_corrente = round(competenza.quota_fissa * min(3, mesi) / mesi, 2)
+            fisso_cassa = round(competenza.quota_fissa - rinvio_corrente + fisso_rinviato, 2)
+            fisso_rinviato = rinvio_corrente
+            contributi_cassa += fisso_cassa
 
         # 3. L'imposta si calcola deducendo cio' che e' stato versato per cassa.
-        esito = calcola(replace(situazione, ricavi=ricavi, contributi_versati=contributi_cassa))
+        esito = calcola(replace(situazione, ricavi=ricavi, mesi_attivita=mesi,
+                               startup=situazione.startup and indice < P.ANNI_ALIQUOTA_STARTUP,
+                               contributi_versati=contributi_cassa))
 
         # 4. Imposta effettivamente versata nell'anno: saldo dell'anno prima
         # (al netto degli acconti realmente versati) piu' acconti dell'anno
@@ -374,12 +386,13 @@ def piano_cassa(
                 )
         if gestione_impresa:
             dettaglio.append(
-                f"Quota fissa INPS in quattro rate: {formato.numero(competenza.quota_fissa, 2)} euro."
+                f"Quota fissa INPS pagata nell'anno: {formato.numero(fisso_cassa, 2)} euro; "
+                f"quota rinviata a febbraio successivo: {formato.numero(fisso_rinviato, 2)} euro."
             )
-        if contributi_cassa - (competenza.quota_fissa if gestione_impresa else 0.0) > 0:
+        if contributi_cassa - fisso_cassa > 0:
             dettaglio.append(
                 f"Saldo e acconti contributivi: "
-                f"{formato.numero(contributi_cassa - (competenza.quota_fissa if gestione_impresa else 0.0), 2)} euro."
+                f"{formato.numero(contributi_cassa - fisso_cassa, 2)} euro."
             )
         elif indice == 0 and not gestione_impresa:
             dettaglio.append(
@@ -400,7 +413,8 @@ def piano_cassa(
         )
 
         imposta_prec = esito.imposta_sostitutiva
-        acconti_versati_prec = acconto_imposta
+        # Anche la quota estinta in compensazione e' un acconto assolto.
+        acconti_versati_prec = acconto_dovuto
         variabile_prec2, variabile_prec = variabile_prec, competenza.quota_variabile
 
     return tuple(piano)
@@ -430,3 +444,4 @@ def ricavi_per_netto_obiettivo(
         else:
             alto = medio
     return round((basso + alto) / 2, 2)
+

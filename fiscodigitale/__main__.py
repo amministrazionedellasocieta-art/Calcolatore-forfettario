@@ -44,6 +44,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--natura", choices=(diagnosi.PROFESSIONALE, diagnosi.IMPRESA),
                         help="come eserciti: professionale o impresa. Rilevante solo "
                              "per i lavori il cui inquadramento non e' univoco")
+    parser.add_argument("--startup-confermata", action="store_true",
+                        help="nuova attivita' con tutti i requisiti del comma 65 verificati: "
+                             "assenza di attivita' nei tre anni precedenti, nessuna mera "
+                             "prosecuzione e verifica dei ricavi in caso di subentro")
     parser.add_argument("--non-startup", action="store_true",
                         help="non applicare l'aliquota agevolata al 5 per cento")
     parser.add_argument("--elenco", action="store_true", help="elenca tutte le professioni")
@@ -84,7 +88,8 @@ def main(argv: list[str] | None = None) -> int:
             costi_annui=args.costi,
             acquisti_servizi_esteri=args.esteri,
             clienti_esteri_b2b=args.esteri > 0,
-            prima_attivita=not args.non_startup,
+            prima_attivita=args.startup_confermata and not args.non_startup,
+            requisiti_startup_confermati=args.startup_confermata and not args.non_startup,
             natura_attivita=args.natura,
             altre_attivita=tuple(altre),
         )
@@ -141,3 +146,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

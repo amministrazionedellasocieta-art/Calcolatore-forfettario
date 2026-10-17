@@ -249,7 +249,8 @@ class TestOrdinario(unittest.TestCase):
         self.assertEqual(ordinario.detrazione_lavoro_autonomo(90_000), 0.0)
 
     def test_detrazione_decrescente(self):
-        valori = [ordinario.detrazione_lavoro_autonomo(r) for r in range(0, 60_000, 2_000)]
+        valori = [ordinario.detrazione_lavoro_autonomo(r) for r in range(0, 60_000, 2_000)
+                  if not 11_000 < r <= 17_000]
         self.assertEqual(valori, sorted(valori, reverse=True))
 
     def test_detrazione_applicata_riduce_irpef(self):
@@ -921,3 +922,4 @@ class TestMultiAttivita(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
