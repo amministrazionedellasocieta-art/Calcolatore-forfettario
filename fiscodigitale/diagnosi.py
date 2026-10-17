@@ -128,6 +128,7 @@ class Profilo:
     codice_ateco: str | None = None
     prestazioni_spettacolo: bool | None = None
     verifica_specialistica_confermata: bool = False
+    soggetto_isa: bool = False
 
     def __post_init__(self) -> None:
         if self.ricavi_attesi < 0:
@@ -484,7 +485,8 @@ def _adempimenti(profilo: Profilo, prof: professioni.Professione, gestione: str)
             "Iscrizione alla Gestione Artigiani o Commercianti",
             "Comporta contributi fissi trimestrali dovuti anche a reddito zero "
             f"(circa {formato.numero(P.COMMERCIANTI['contributo_fisso'], 0)} euro l'anno). "
-            "Chiedi la riduzione del 35% entro il 28 febbraio.",
+            "Per il 35%: domanda tempestiva dopo la nuova iscrizione; per attivita gia "
+            "esistenti termine del 28 febbraio; nessun rinnovo per chi gia beneficia.",
             "Contestuale all'apertura",
         ))
     elif gestione == previdenza.GESTIONE_SEPARATA:
@@ -664,7 +666,8 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
     if riduzione and gestione not in previdenza.GESTIONI_IMPRESA:
         riduzione = 0
     if riduzione == 50 and not profilo.prima_iscrizione_2025:
-        riduzione = 35  # dal 2026 la riduzione al 50% non e' piu' richiedibile
+        raise ValueError("Riduzione del 50% riservata alla prima iscrizione nel 2025; "
+                         "non viene sostituita automaticamente con un altro beneficio.")
 
     situazione = forfettario.Situazione(
         ricavi=profilo.ricavi_totali,
@@ -681,7 +684,7 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
         situazione, profilo.costi_annui,
         iva_indetraibile=iva_estero.iva_reverse_charge(profilo.acquisti_servizi_esteri),
     )
-    piano = forfettario.piano_cassa(situazione, anni=3)
+    piano = () if riduzione == 50 else forfettario.piano_cassa(situazione, anni=3)
 
     costo_inquadramento = None
     if da_chiarire or prevalente.professione.gestione_inps == professioni.DIPENDE:
@@ -776,6 +779,7 @@ def analizza(profilo: Profilo, oggi: date | None = None) -> Diagnosi:
         vendite_ue_b2b=profilo.clienti_esteri_b2b,
         riduzione_contributiva_da_chiedere=gestione in previdenza.GESTIONI_IMPRESA,
         oss=profilo.vendite_privati_ue > P.SOGLIA_OSS,
+        soggetto_isa=profilo.soggetto_isa,
     )
 
     avvisi: list[str] = list(prof.attenzione)

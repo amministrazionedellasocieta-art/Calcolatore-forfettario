@@ -237,7 +237,7 @@ class Acconti:
     nota: str
 
 
-def acconti(imposta_anno: float) -> Acconti:
+def acconti(imposta_anno: float, *, soggetto_isa: bool = False) -> Acconti:
     """Acconti dell'anno successivo, con metodo storico (100% dell'imposta)."""
     imposta_anno = max(0.0, imposta_anno)
     if imposta_anno <= P.ACCONTO_SOGLIA_MINIMA:
@@ -262,9 +262,11 @@ def acconti(imposta_anno: float) -> Acconti:
     return Acconti(
         dovuto=True,
         totale=round(totale, 2),
-        prima_rata=round(totale * P.ACCONTO_PRIMA_RATA, 2),
-        seconda_rata=round(totale * P.ACCONTO_SECONDA_RATA, 2),
-        nota="Prima rata (40%) entro il 30 giugno, seconda (60%) entro il 30 novembre.",
+        prima_rata=round(totale * (0.5 if soggetto_isa else P.ACCONTO_PRIMA_RATA), 2),
+        seconda_rata=round(totale - round(totale * (0.5 if soggetto_isa else P.ACCONTO_PRIMA_RATA), 2), 2),
+        nota=("Riparto ISA: due rate del 50%, anche per i forfettari che rientrano nel perimetro. "
+              if soggetto_isa else f"Riparto ordinario: {P.ACCONTO_PRIMA_RATA:.0%}/{P.ACCONTO_SECONDA_RATA:.0%}. ")
+             + "Scadenze da verificare nel calendario annuale, comprese le proroghe.",
     )
 
 
@@ -310,6 +312,9 @@ def piano_cassa(
     """
     if anni < 1:
         raise ValueError("servono almeno 1 anno")
+    if situazione.riduzione == 50:
+        raise ValueError("Il piano nuova apertura non supporta il beneficio 2025: "
+                         "servono data di avvio, storico versamenti e scadenza dei 36 mesi.")
 
     gestione_impresa = situazione.gestione in previdenza.GESTIONI_IMPRESA
     quota_acconto_contributi = (

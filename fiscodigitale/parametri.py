@@ -137,6 +137,7 @@ DETRAZIONE_AUTONOMI_QUOTA_DECRESCENTE = 765.0
 # ---------------------------------------------------------------------------
 
 IVA_ORDINARIA = 0.22
+SOGLIA_ACQUISTI_BENI_UE = 10_000.0  # art. 38 c. 5 lett. c DL 331/93
 SOGLIA_OSS = 10_000.0          # vendite a distanza + servizi TTE B2C verso UE
 GIORNI_EMISSIONE_FATTURA = 12
 GIORNO_AUTOFATTURA_ACQUISTI = 15  # entro il 15 del mese successivo
@@ -176,3 +177,4 @@ SOGLIA_PRESTAZIONE_OCCASIONALE_INPS = 5_000.0   # oltre: iscrizione Gestione Sep
 SOGLIA_DIRITTO_AUTORE_ABBATTIMENTO = 0.25       # 40% se under 35
 ETA_ABBATTIMENTO_MAGGIORE = 35
 ABBATTIMENTO_DIRITTO_AUTORE_UNDER35 = 0.40
+

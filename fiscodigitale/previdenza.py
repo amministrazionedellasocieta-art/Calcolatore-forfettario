@@ -104,7 +104,7 @@ def artigiani_commercianti(
     Struttura: quota fissa fino al minimale + percentuale sull'eccedenza,
     con secondo scaglione oltre la soglia annuale.
 
-    riduzione: 0 (nessuna), 35 (forfettari, su tutta la contribuzione),
+    riduzione: 0 (nessuna), 35 (forfettari, maternita esclusa),
     50 (prima iscrizione 2025, 36 mesi, solo sulla quota IVS).
     """
     if gestione not in GESTIONI_IMPRESA:
@@ -121,7 +121,7 @@ def artigiani_commercianti(
     fisso_pieno = tabella["contributo_fisso"] * ragguaglio
     maternita = P.CONTRIBUTO_MATERNITA * ragguaglio
     minimale = P.MINIMALE_ARTIGIANI_COMMERCIANTI * ragguaglio
-    scaglione = P.SCAGLIONE_ARTIGIANI_COMMERCIANTI * ragguaglio
+    scaglione = P.SCAGLIONE_ARTIGIANI_COMMERCIANTI
     # Soggetti privi di anzianita' al 31/12/1995: il massimale annuo
     # non e' frazionabile per mese (circolare INPS 14/2026, paragrafo 4).
     massimale = P.MASSIMALE_ARTIGIANI_COMMERCIANTI
@@ -142,17 +142,21 @@ def artigiani_commercianti(
     ]
 
     if riduzione == 35:
-        fisso = fisso_pieno * (1 - P.RIDUZIONE_35)
+        fisso = (fisso_pieno - maternita) * (1 - P.RIDUZIONE_35) + maternita
         variabile = variabile_pieno * (1 - P.RIDUZIONE_35)
         note.append(
             "Riduzione del 35% riservata ai forfettari: si applica all'intera "
-            "contribuzione dovuta. La domanda va presentata entro il 28 febbraio."
+            "contribuzione esclusa la maternita. Per le nuove aperture domanda tempestiva "
+            "dopo l’iscrizione; chi gia beneficia non rinnova ogni anno."
         )
     elif riduzione == 50:
         # La riduzione del 50% colpisce la sola quota IVS: la maternita' resta piena.
-        ivs_fisso = fisso_pieno - maternita
-        fisso = ivs_fisso * (1 - P.RIDUZIONE_50) + maternita
-        variabile = variabile_pieno * (1 - P.RIDUZIONE_50)
+        # INPS 83/2025: anche l'indennizzo commercianti (0,48%) resta intero.
+        indennizzo_fisso = minimale * 0.0048 if gestione == COMMERCIANTI else 0.0
+        indennizzo_variabile = max(0.0, imponibile_utile - minimale) * 0.0048 if gestione == COMMERCIANTI else 0.0
+        non_riducibile = maternita + indennizzo_fisso
+        fisso = (fisso_pieno - non_riducibile) * (1 - P.RIDUZIONE_50) + non_riducibile
+        variabile = (variabile_pieno - indennizzo_variabile) * (1 - P.RIDUZIONE_50) + indennizzo_variabile
         note.append(
             "Riduzione del 50% sulla sola quota IVS, valida 36 mesi dall'avvio. "
             "Riservata a chi si e' iscritto per la prima volta nel 2025: dal "

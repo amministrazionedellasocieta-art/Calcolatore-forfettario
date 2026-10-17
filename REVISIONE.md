@@ -11,7 +11,7 @@ Correzioni successive alla versione `059fa4c` della PR 2.
 
 ## Ipotesi del calcolo
 
-Il piano simula una nuova apertura: senza una data di avvio esplicita, un numero di mesi inferiore a dodici indica apertura all'inizio del mese `13 - mesi_attivita`. Negli anni successivi si considerano dodici mesi. Parametri annuali, gestione previdenziale e riduzione contributiva rimangono costanti: non e' un calendario F24 personalizzato e non gestisce automaticamente la scadenza dei 36 mesi dell'agevolazione INPS al 50%.
+Il piano simula una nuova apertura: senza una data di avvio esplicita, un numero di mesi inferiore a dodici indica apertura all'inizio del mese `13 - mesi_attivita`. Negli anni successivi si considerano dodici mesi. Parametri annuali, gestione previdenziale e riduzione contributiva rimangono costanti: non e' un calendario F24 personalizzato. Il piano con agevolazione INPS del 50% e sospeso, per evitare di estenderla oltre i 36 mesi o ricostruire senza dati una posizione aperta nel 2025.
 
 I costi del confronto comprendono i servizi esteri al netto dell'IVA da inversione contabile. Quest'ultima e' un costo aggiuntivo nel forfettario; nel confronto ordinario si assume piena detraibilita'. Non e' un confronto tra prezzi B2C IVA inclusa. Il grafico varia i costi mantenendo invariato l'importo inserito di acquisti esteri.
 
@@ -41,3 +41,24 @@ Completato il confronto delle 44 schede con struttura, note e raccordo ISTAT agg
 - Sette nuovi test verificano date, mancato rinvio OSS, calendario delle prossime scadenze, conservazione dello slittamento ordinario dei weekend, massimale per periodi di uno/tre/sei/dodici mesi e quota fissa.
 
 Fonti: [Commissione europea, dichiarazione e pagamento OSS](https://vat-one-stop-shop.ec.europa.eu/one-stop-shop/declare-and-pay-oss_en), [INPS 14/2026, paragrafo 4](https://www.inps.it/content/dam/inps-site/it/scorporati/circolari-e-messaggi/2026/02/Circolare_15162/Allegati/16561_Circolare-numero-14-del-09-02-2026.pdf).
+
+
+## Acconti, INPS, IVA e prova FCC
+
+- Riparto fiscale 50/50 per il perimetro ISA confermato, incluso il forfettario; resta 40/60 negli altri casi. Proroga 2026 al 20 luglio, differimento al 20 agosto con 0,80% nel perimetro previsto.
+- Maternita intera con riduzione 35%; con riduzione 50% anche indennizzo commercianti 0,48% intero sul minimale e sull'eccedenza. Nessuna conversione automatica da beneficio 50% non spettante a beneficio 35%.
+- Secondo scaglione annuo INPS non ragguagliato ai mesi. Piano nuova apertura sospeso per beneficio 2025: non simula la durata senza storico.
+- Festivita nazionali e versamenti di agosto; corretto il testo dell'acconto GS e aggiunto il secondo acconto eccedente per imprese. INTRASTAT richiede periodicita esplicita.
+- IVA: cumuli dell'anno precedente e opzioni per vendite/acquisti UE, importo della singola operazione nell'interfaccia, servizi generici esclusi dal cumulo OSS. Servizi particolari e piattaforme con controparte ambigua sospesi; registro con aliquota indicata e opzione/acquisti UE precedenti.
+- Scheda iniziale FCC con riepilogo scaricabile e apertura del modulo ufficiale. Nessun invio automatico al CRM. Dettagli e casi attesi in [PROVA_FCC.md](PROVA_FCC.md).
+
+Verifica finale locale: 192 test superati, nessuno saltato, inclusi 10 Streamlit. Compilazione Python e controllo whitespace superati.
+
+Fonti aggiuntive:
+
+- [AE, risoluzione 93/E e perimetro ISA/forfettari](https://def.finanze.it/DocTribFrontend/getContent.do?id=%7B958601EC-B6B4-469F-BA18-0B686BAF8A1A%7D).
+- [AE, calendario 2026](https://infoprecompilata.agenziaentrate.gov.it/portale/scadenze).
+- [INPS 1947/2017, maternita intera nel regime agevolato](https://servizi2.inps.it/servizi/Bussola/VisualizzaDoc.aspx?sVirtualURL=%2FMessaggi%2FMessaggio+numero+1947+del+10-05-2017.htm).
+- [INPS 83/2025, agevolazione 50%](https://www.inps.it/it/it/inps-comunica/atti/circolari-messaggi-e-normativa/dettaglio.circolari-e-messaggi.2025.04.circolare-numero-83-del-24-04-2025_14907.html).
+- [DL 331/1993, acquisti UE art. 38 e vendite a distanza art. 41](https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:decreto.legge:1993-08-30;331).
+- [Modulo ufficiale FCC verificato](https://www.fiscochiaroconsulting.it/#form-preventivo).

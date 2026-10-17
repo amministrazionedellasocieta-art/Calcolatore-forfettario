@@ -45,11 +45,30 @@ class Profilo:
     vendite_ue_b2b: bool = False
     riduzione_contributiva_da_chiedere: bool = False
     oss: bool = False
+    soggetto_isa: bool = False
+    periodicita_intrastat: str | None = None
+
+    def __post_init__(self):
+        if self.periodicita_intrastat not in (None, "mensile", "trimestrale"):
+            raise ValueError("periodicita INTRASTAT non valida")
 
 
 def _giorno_lavorativo(giorno: date) -> date:
     """Sposta al primo giorno feriale successivo (sabato e domenica)."""
-    while giorno.weekday() >= 5:
+    # Festivita nazionali; lunedi di Pasqua calcolato con algoritmo gregoriano.
+    y = giorno.year
+    a, b, c = y % 19, y // 100, y % 100
+    d, e = b // 4, b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    pasqua = date(y, (h + l - 7 * m + 114) // 31, (h + l - 7 * m + 114) % 31 + 1)
+    festivi = {date(y, mo, dy) for mo, dy in ((1,1),(1,6),(4,25),(5,1),(6,2),(8,15),(11,1),(12,8),(12,25),(12,26))}
+    festivi.add(pasqua + timedelta(days=1))
+    while giorno.weekday() >= 5 or giorno in festivi:
         giorno += timedelta(days=1)
     return giorno
 
@@ -66,18 +85,23 @@ def calendario(anno: int = P.ANNO_IMPOSTA, profilo: Profilo | None = None) -> tu
                      titolo, descrizione, categoria, ricorrente)
         )
 
+    # La proroga 2026 e verificata separatamente: non estenderla agli altri anni.
+    saldo = date(anno, 7, 20) if anno == 2026 and p.soggetto_isa else date(anno, 6, 30)
+    prima, seconda = (50, 50) if p.soggetto_isa else (40, 60)
+    differimento = ("20 agosto con maggiorazione dello 0,80%" if anno == 2026 and p.soggetto_isa
+                    else "30 luglio con maggiorazione dello 0,40%")
     # --- Imposte -----------------------------------------------------------
     aggiungi(
-        date(anno, 6, 30),
+        saldo,
         "Saldo imposte e primo acconto",
-        "Saldo dell'anno precedente e prima rata di acconto (40%). E' possibile "
-        "versare entro il 30 luglio con una maggiorazione dello 0,40%.",
+        f"Saldo dell'anno precedente e prima rata di acconto ({prima}%). "
+        f"Differimento al {differimento}. Verificare requisiti e proroghe annuali.",
         FISCALE,
     )
     aggiungi(
         date(anno, 11, 30),
         "Secondo acconto",
-        "Seconda rata di acconto (60%) delle imposte sui redditi.",
+        f"Seconda rata di acconto ({seconda}%) delle imposte sui redditi.",
         FISCALE,
     )
     aggiungi(
@@ -103,26 +127,29 @@ def calendario(anno: int = P.ANNO_IMPOSTA, profilo: Profilo | None = None) -> tu
                 CONTRIBUTI,
             )
         aggiungi(
-            date(anno, 6, 30),
+            saldo,
             "Saldo e primo acconto contributi eccedenti",
             "Quota percentuale sul reddito oltre il minimale: saldo dell'anno "
             "precedente e primo acconto.",
             CONTRIBUTI,
         )
+        aggiungi(date(anno, 11, 30), "Secondo acconto contributi eccedenti",
+                 "Seconda rata di acconto sulla quota eccedente il minimale.", CONTRIBUTI)
         if p.riduzione_contributiva_da_chiedere:
             aggiungi(
                 date(anno, 2, 28),
                 "Domanda di riduzione contributiva del 35%",
                 "Termine perentorio per i forfettari che vogliono la riduzione del "
-                "35% per l'anno in corso. Chi non presenta la domanda paga per intero.",
+                "35% per attivita gia esistenti che accedono per la prima volta. "
+                "Chi gia beneficia non rinnova; nuove aperture: domanda tempestiva dopo iscrizione.",
                 CONTRIBUTI,
             )
     else:
         aggiungi(
-            date(anno, 6, 30),
+            saldo,
             "Saldo e primo acconto Gestione Separata",
             "I contributi della Gestione Separata seguono le scadenze delle imposte: "
-            "saldo dell'anno precedente piu' primo acconto (40% dell'80% dovuto).",
+            "saldo dell'anno precedente piu' meta dell'acconto dell'80% (40% del contributo storico).",
             CONTRIBUTI,
         )
         aggiungi(
@@ -136,7 +163,7 @@ def calendario(anno: int = P.ANNO_IMPOSTA, profilo: Profilo | None = None) -> tu
     if p.acquisti_esteri:
         for mese in range(1, 13):
             aggiungi(
-                date(anno, mese, 16),
+                date(anno, mese, 20 if mese == 8 else 16),
                 "Versamento IVA da inversione contabile",
                 "Versamento con F24 dell'IVA sugli acquisti esteri del mese "
                 "precedente. Nel forfettario non e' detraibile.",
@@ -151,8 +178,9 @@ def calendario(anno: int = P.ANNO_IMPOSTA, profilo: Profilo | None = None) -> tu
                 IVA,
                 ricorrente=True,
             )
-    if p.vendite_ue_b2b:
-        for mese in range(1, 13):
+    if p.vendite_ue_b2b and p.periodicita_intrastat:
+        mesi_intrastat = range(1, 13) if p.periodicita_intrastat == "mensile" else (1, 4, 7, 10)
+        for mese in mesi_intrastat:
             aggiungi(
                 date(anno, mese, 25),
                 "Elenchi INTRASTAT",

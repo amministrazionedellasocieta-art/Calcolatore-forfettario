@@ -77,6 +77,18 @@ class TestApp(unittest.TestCase):
         self.assert_senza_eccezioni(at)
         self.assertIn("Netto annuo reale",[x.label for x in at.metric])
 
+    def test_prova_fcc_con_riduzione_2025(self):
+        at = self.avvia()
+        next(x for x in at.sidebar.selectbox if x.label == "Professione").set_value(professioni.get("ecommerce")).run()
+        next(x for x in at.sidebar.selectbox if x.key == "scenario_ateco_principale").set_value("47.71.10")
+        next(x for x in at.sidebar.checkbox if x.label == "Prima iscrizione INPS impresa nel 2025").set_value(True)
+        at.run()
+        next(x for x in at.sidebar.selectbox if x.label == "Riduzione contributiva richiesta").set_value(50).run()
+        self.assert_senza_eccezioni(at)
+        self.assertTrue(any("Piano sospeso" in x.value for x in at.info))
+        self.assertEqual(at.tabs[0].label, "Il tuo risultato")
+        self.assertTrue(any("Fisco Chiaro" in x.label for x in at.get("link_button")))
+
     def test_causa_di_esclusione(self):
         at = self.avvia()
         at.sidebar.number_input[4].set_value(50_000).run()  # redditi dipendente

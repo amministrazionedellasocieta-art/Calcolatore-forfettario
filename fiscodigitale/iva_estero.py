@@ -45,6 +45,19 @@ class Operazione:
     importo: float = 0.0
     vendite_ue_b2c_anno: float = 0.0
     acquisti_beni_ue_anno: float = 0.0
+    vendite_ue_b2c_anno_precedente: float = 0.0
+    acquisti_beni_ue_anno_precedente: float = 0.0
+    opzione_iva_destinazione: bool = False
+    opzione_acquisti_intracomunitari: bool = False
+    beni_speciali: bool = False
+    stabilito_solo_italia: bool = True
+    servizio_generico_confermato: bool = True
+
+    def __post_init__(self):
+        if any(v < 0 for v in (self.importo, self.vendite_ue_b2c_anno,
+                              self.acquisti_beni_ue_anno, self.vendite_ue_b2c_anno_precedente,
+                              self.acquisti_beni_ue_anno_precedente)):
+            raise ValueError("importi IVA non negativi richiesti")
 
 
 @dataclass(frozen=True)
@@ -58,6 +71,7 @@ class EsitoIva:
     adempimenti: tuple[str, ...] = ()
     scadenze: tuple[str, ...] = ()
     rischi: tuple[str, ...] = ()
+    da_verificare: bool = False
 
     @property
     def natura_descrizione(self) -> str:
@@ -134,7 +148,9 @@ def _vendita(op: Operazione) -> EsitoIva:
                 ),
             )
         if op.area == UE and op.controparte == B2C:
-            sopra_soglia = op.vendite_ue_b2c_anno + op.importo > P.SOGLIA_OSS
+            sopra_soglia = (op.vendite_ue_b2c_anno + op.importo > P.SOGLIA_OSS
+                            or op.vendite_ue_b2c_anno_precedente > P.SOGLIA_OSS
+                            or op.opzione_iva_destinazione or not op.stabilito_solo_italia)
             if sopra_soglia:
                 return EsitoIva(
                     titolo="Vendita a distanza a privato UE oltre soglia",
@@ -208,7 +224,9 @@ def _vendita(op: Operazione) -> EsitoIva:
 
     # Servizi B2C
     if op.oggetto == SERVIZIO_ELETTRONICO:
-        sopra_soglia = op.vendite_ue_b2c_anno + op.importo > P.SOGLIA_OSS
+        sopra_soglia = (op.vendite_ue_b2c_anno + op.importo > P.SOGLIA_OSS
+                            or op.vendite_ue_b2c_anno_precedente > P.SOGLIA_OSS
+                            or op.opzione_iva_destinazione or not op.stabilito_solo_italia)
         if op.area == UE and sopra_soglia:
             return EsitoIva(
                 titolo="Servizio elettronico a privato UE oltre soglia",
@@ -246,6 +264,11 @@ def _vendita(op: Operazione) -> EsitoIva:
             adempimenti=("Verifica eventuali obblighi di registrazione nel Paese del cliente.",),
         )
 
+    if op.area == EXTRA_UE:
+        return EsitoIva("Servizio a privato extra-UE", "Territorialita da verificare",
+                        "artt. 7-ter e 7-septies DPR 633/72", "Da definire sulla prestazione",
+                        rischi=("Consulenza, pubblicita e altri servizi possono derogare al criterio del prestatore.",),
+                        da_verificare=True)
     return EsitoIva(
         titolo=f"Servizio generico a privato {'UE' if op.area == UE else 'extra-UE'}",
         iva="Rilevante in Italia (nessuna IVA se forfettario)" if forfe
@@ -276,16 +299,17 @@ def _acquisto(op: Operazione) -> EsitoIva:
 
     if op.oggetto == BENE and op.area == UE and forfe:
         cumulo = op.acquisti_beni_ue_anno + op.importo
-        if cumulo <= P.SOGLIA_OSS:
+        if (cumulo <= P.SOGLIA_ACQUISTI_BENI_UE and op.acquisti_beni_ue_anno_precedente <= P.SOGLIA_ACQUISTI_BENI_UE
+                and not op.opzione_acquisti_intracomunitari and not op.beni_speciali):
             return EsitoIva(
                 titolo="Acquisto di beni UE sotto soglia (forfettario)",
-                iva="Paghi l'IVA del Paese del fornitore",
+                iva="IVA applicata dal fornitore secondo le regole delle vendite a distanza",
                 riferimento="art. 38 c. 5 lett. c DL 331/93",
                 documento="Fattura estera, nessuna integrazione",
                 adempimenti=(
-                    f"Finche' resti sotto {formato.numero(P.SOGLIA_OSS, 0)} euro annui di acquisti "
+                    f"Finche' resti sotto {formato.numero(P.SOGLIA_ACQUISTI_BENI_UE, 0)} euro annui di acquisti "
                     f"intracomunitari di beni (ora a {formato.numero(op.acquisti_beni_ue_anno, 0)}) "
-                    "l'acquisto e' trattato come interno al Paese del fornitore.",
+                    "non effettui un acquisto intracomunitario imponibile in Italia. Verifica anche anno precedente e opzioni.",
                 ),
                 rischi=(
                     "Superata la soglia scatta l'obbligo di iscrizione al VIES e di "
@@ -315,14 +339,19 @@ def _acquisto(op: Operazione) -> EsitoIva:
                         "senza poterla detrarre: e' un costo puro.",
                     )
                     if forfe
-                    else ("IVA a debito e a credito nella stessa liquidazione: effetto neutro.",)
+                    else ("Detrazione secondo inerenza, limiti e pro-rata: neutralita solo con detrazione integrale.",)
                 )
                 if op.area == UE
                 else ("L'IVA all'importazione non e' detraibile per il forfettario.",)
             ),
         )
 
-    # Servizi acquistati dall'estero: sempre reverse charge.
+    # Solo servizi generici territorialmente rilevanti e imponibili in Italia.
+    if not op.servizio_generico_confermato:
+        return EsitoIva("Servizio estero da verificare", "Trattamento IVA da confermare",
+                        "artt. 7-ter e seguenti, 10 e 17 DPR 633/72", "Da definire sul documento",
+                        rischi=("Verificare territorialita, esenzione e aliquota: nessun 22% automatico.",),
+                        da_verificare=True)
     return EsitoIva(
         titolo=f"Acquisto di servizi da fornitore {'UE' if op.area == UE else 'extra-UE'}",
         iva="IVA italiana dovuta da te con inversione contabile",
@@ -343,7 +372,7 @@ def _acquisto(op: Operazione) -> EsitoIva:
                     f"{P.IVA_ORDINARIA * 100:.0f} euro di IVA in piu'.",
                 )
                 if forfe
-                else ("Doppia annotazione nei registri: l'operazione e' neutra.",)
+                else ("Doppia annotazione; detrazione secondo inerenza, limiti e pro-rata.",)
             )
         ),
         rischi=(
@@ -358,6 +387,9 @@ def analizza(operazione: Operazione) -> EsitoIva:
     if operazione.direzione == VENDITA:
         return _vendita(operazione)
     if operazione.direzione == ACQUISTO:
+        if operazione.controparte == B2C:
+            return EsitoIva("Acquisto da privato", "Status del venditore e operazione da verificare",
+                            "DPR 633/72", "Da definire", da_verificare=True)
         return _acquisto(operazione)
     raise ValueError(f"direzione non valida: {operazione.direzione!r}")
 
@@ -502,9 +534,14 @@ def analizza_piattaforma(
         regime=regime,
         importo=importo,
     )
+    if slug in {"stripe", "paypal", "tiktok", "twitch", "patreon", "spotify", "udemy", "gumroad", "openai"}:
+        return p, EsitoIva("Contratto e documento da verificare", "Nessun trattamento automatico",
+                          "Territorialita e natura della prestazione", "Da definire",
+                          rischi=p.note, da_verificare=True)
     return p, analizza(operazione)
 
 
 def iva_reverse_charge(importo: float, aliquota: float = P.IVA_ORDINARIA) -> float:
     """IVA da versare su un acquisto estero in reverse charge."""
     return round(max(0.0, importo) * aliquota, 2)
+

@@ -1,4 +1,6 @@
-# Fisco Digitale
+# Fisco Chiaro — simulatore forfettario
+
+**Versione di prova FCC:** [avvio, percorso cliente, casi verificati e limiti](PROVA_FCC.md).
 
 Revisione del catalogo: [criteri, fonti e verifica delle 44 schede](VERIFICA_CATALOGO.md).
 I codici sono scenari da confermare sul contenuto reale; per i casi incompleti
@@ -34,8 +36,8 @@ acquisti esteri, che nel forfettario non recuperi mai.
 nulla, il secondo arrivano insieme il saldo del primo e gli acconti del secondo.
 È il punto in cui la maggior parte dei freelance si trova scoperta. Il piano di
 cassa applica le regole reali: acconto d'imposta al 100%, acconto della Gestione
-Separata all'80%, quota fissa artigiani e commercianti in quattro rate durante
-l'anno.
+Separata all'80%, quota fissa artigiani e commercianti in quattro rate, con la quarta a febbraio
+dell’anno successivo. Il piano non si applica al beneficio INPS 2025 del 50%.
 
 **Il confronto onesto con l'ordinario** — con il calcolo del punto di pareggio:
 oltre quanti costi reali il forfettario inizia a farti perdere soldi. Per un
@@ -123,10 +125,10 @@ testabili in isolamento.
 | `diagnosi.py` | Orchestrazione: dal lavoro alla checklist completa |
 
 ```bash
-python3 -m unittest discover -s tests -v   # 171 test
+python3 -m unittest discover -s tests -v   # 192 test
 ```
 
-I test del motore girano senza dipendenze: i cinque smoke test dell'interfaccia
+I test del motore girano senza dipendenze: i dieci test dell'interfaccia
 si saltano da soli dove Streamlit non è installato. La CI di GitHub Actions
 esegue il motore su Python 3.11 e 3.12 e l'app su 3.11 con le dipendenze
 installate.

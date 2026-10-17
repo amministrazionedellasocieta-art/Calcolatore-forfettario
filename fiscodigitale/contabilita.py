@@ -29,14 +29,17 @@ class Movimento:
     controparte: str = iva_estero.B2B
     oggetto: str = iva_estero.SERVIZIO
     categoria: str = ""
+    aliquota_iva: float = P.IVA_ORDINARIA
 
     def __post_init__(self) -> None:
+        if not 0 <= self.aliquota_iva <= 1:
+            raise ValueError("aliquota IVA compresa tra 0 e 1 richiesta")
         if self.importo < 0:
             raise ValueError("l'importo va indicato in valore assoluto")
         if self.tipo not in (INCASSO, SPESA):
             raise ValueError(f"tipo non valido: {self.tipo!r}")
 
-    def iva_reverse_charge(self, cumulo_beni_ue: float = 0.0) -> float:
+    def iva_reverse_charge(self, cumulo_beni_ue: float = 0.0, *, acquisti_precedenti: float = 0.0, opzione_intracomunitari: bool = False) -> float:
         """IVA italiana da versare con F24 in inversione contabile.
 
         Non tutti gli acquisti esteri la generano, e trattarli allo stesso modo
@@ -56,9 +59,10 @@ class Movimento:
         if self.oggetto == iva_estero.BENE:
             if self.area == iva_estero.EXTRA_UE:
                 return 0.0
-            if cumulo_beni_ue + self.importo <= P.SOGLIA_OSS:
+            if (cumulo_beni_ue + self.importo <= P.SOGLIA_ACQUISTI_BENI_UE
+                    and acquisti_precedenti <= P.SOGLIA_ACQUISTI_BENI_UE and not opzione_intracomunitari):
                 return 0.0
-        return iva_estero.iva_reverse_charge(self.importo)
+        return iva_estero.iva_reverse_charge(self.importo, self.aliquota_iva)
 
     @property
     def iva_in_dogana(self) -> float:
@@ -68,7 +72,7 @@ class Movimento:
             and self.area == iva_estero.EXTRA_UE
             and self.oggetto == iva_estero.BENE
         ):
-            return iva_estero.iva_reverse_charge(self.importo)
+            return iva_estero.iva_reverse_charge(self.importo, self.aliquota_iva)
         return 0.0
 
 
@@ -105,7 +109,10 @@ class Soglia:
 class Registro:
     """Registro di cassa con proiezioni e controllo delle soglie."""
 
-    def __init__(self, anno: int = P.ANNO_IMPOSTA, movimenti: list[Movimento] | None = None):
+    def __init__(self, anno: int = P.ANNO_IMPOSTA, movimenti: list[Movimento] | None = None,
+                 *, acquisti_beni_ue_precedenti: float = 0.0, opzione_intracomunitari: bool = False):
+        self.acquisti_beni_ue_precedenti = acquisti_beni_ue_precedenti
+        self.opzione_intracomunitari = opzione_intracomunitari
         self.anno = anno
         self.movimenti: list[Movimento] = list(movimenti or [])
 
@@ -136,6 +143,7 @@ class Registro:
                 if m.tipo == INCASSO
                 and m.area == iva_estero.UE
                 and m.controparte == iva_estero.B2C
+                and m.oggetto in (iva_estero.BENE, iva_estero.SERVIZIO_ELETTRONICO)
             ),
             2,
         )
@@ -162,7 +170,9 @@ class Registro:
         cumulo_beni_ue = 0.0
         righe: list[tuple[Movimento, float]] = []
         for m in sorted(self.movimenti, key=lambda x: x.data):
-            righe.append((m, m.iva_reverse_charge(cumulo_beni_ue)))
+            righe.append((m, m.iva_reverse_charge(cumulo_beni_ue,
+                acquisti_precedenti=self.acquisti_beni_ue_precedenti,
+                opzione_intracomunitari=self.opzione_intracomunitari)))
             if (
                 m.tipo == SPESA
                 and m.area == iva_estero.UE
@@ -239,7 +249,7 @@ class Registro:
             Soglia(
                 nome="Acquisti di beni UE",
                 valore_corrente=self.acquisti_beni_ue,
-                limite=P.SOGLIA_OSS,
+                limite=P.SOGLIA_ACQUISTI_BENI_UE,
                 descrizione="Cumulo annuo degli acquisti intracomunitari di beni.",
                 conseguenza="Oltre la soglia diventano acquisti intracomunitari veri: "
                             "servono VIES, integrazione e versamento dell'IVA.",

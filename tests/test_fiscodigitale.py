@@ -76,14 +76,14 @@ class TestPrevidenza(unittest.TestCase):
         ridotta = previdenza.artigiani_commercianti(
             30_000, gestione=previdenza.COMMERCIANTI, riduzione=35
         )
-        self.assertAlmostEqual(ridotta.totale, piena.totale * 0.65, places=2)
+        self.assertAlmostEqual(ridotta.totale, round(piena.quota_fissa * .65 + P.CONTRIBUTO_MATERNITA * .35, 2) + round(piena.quota_variabile * .65, 2), places=2)
 
     def test_riduzione_50_lascia_intera_la_maternita(self):
         ridotta = previdenza.artigiani_commercianti(
             10_000, gestione=previdenza.COMMERCIANTI, riduzione=50
         )
-        ivs = P.COMMERCIANTI["contributo_fisso"] - P.CONTRIBUTO_MATERNITA
-        self.assertAlmostEqual(ridotta.totale, ivs * 0.5 + P.CONTRIBUTO_MATERNITA, places=2)
+        ivs = P.COMMERCIANTI["contributo_fisso"] - P.CONTRIBUTO_MATERNITA - P.MINIMALE_ARTIGIANI_COMMERCIANTI * .0048
+        self.assertAlmostEqual(ridotta.totale, ivs * 0.5 + P.CONTRIBUTO_MATERNITA + P.MINIMALE_ARTIGIANI_COMMERCIANTI * .0048, places=2)
 
     def test_riduzione_50_non_piu_richiedibile_da_nuovi_iscritti(self):
         self.assertFalse(P.RIDUZIONE_50_APERTA_A_NUOVE_ISCRIZIONI)
@@ -645,15 +645,11 @@ class TestDiagnosi(unittest.TestCase):
         self.assertTrue(any("Registro Imprese" in a.titolo for a in d.adempimenti))
 
     def test_riduzione_50_declassata_se_non_iscritto_nel_2025(self):
-        d = diagnosi.analizza(
-            diagnosi.Profilo(
-                professione="ecommerce",
-                ricavi_attesi=50_000,
-                riduzione_richiesta=50,
-                prima_iscrizione_2025=False,
-            )
-        )
-        self.assertEqual(d.esito_forfettario.contributi.riduzione_applicata, 35)
+        with self.assertRaisesRegex(ValueError, "prima iscrizione"):
+            diagnosi.analizza(diagnosi.Profilo(
+                professione="ecommerce", ricavi_attesi=50_000,
+                riduzione_richiesta=50, prima_iscrizione_2025=False,
+            ))
 
     def test_tutte_le_professioni_producono_una_diagnosi(self):
         for p in professioni.CATALOGO:

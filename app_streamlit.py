@@ -15,6 +15,7 @@ import streamlit as st
 
 from fiscodigitale import (
     confronto as mod_confronto,
+    prova_fcc,
     contabilita,
     diagnosi,
     forfettario,
@@ -26,7 +27,7 @@ from fiscodigitale import (
 )
 
 st.set_page_config(
-    page_title="Fisco Digitale",
+    page_title="Fisco Chiaro | Simulatore forfettario",
     page_icon="🧭",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -201,12 +202,12 @@ with st.sidebar.expander("Come incassi"):
         "Vendite annue a privati UE (€)", min_value=0, max_value=200_000, value=0, step=500
     )
     acquisti_esteri = st.number_input(
-        "Acquisti annui di servizi esteri (€)",
+        "Servizi esteri imponibili al 22% annui (€)",
         min_value=0,
         max_value=200_000,
         value=2_000,
         step=500,
-        help="Pubblicita', software, commissioni delle piattaforme",
+        help="Solo servizi imponibili al 22% verificati sul documento. Escludi commissioni esenti, servizi non territoriali e acquisti con altre aliquote.",
     )
 
 with st.sidebar.expander("Requisiti e cause di esclusione"):
@@ -234,10 +235,12 @@ with st.sidebar.expander("Previdenza"):
         (0, 35, 50) if prima_iscrizione_2025 else (0, 35),
         format_func=lambda x: {
             0: "Nessuna",
-            35: "35% - forfettari (domanda entro il 28 febbraio)",
+            35: "35% - forfettari, previa domanda e requisiti",
             50: "50% - solo prima iscrizione 2025, per 36 mesi",
         }[x],
     )
+    soggetto_isa = st.checkbox("Attivita nel perimetro ISA confermata",
+        help="Anche un forfettario puo rientrare nel perimetro: attivita con ISA approvato e ricavi entro il limite. Influisce sul riparto e sulle proroghe.")
     gia_assicurato = st.checkbox("Sono gia' assicurato altrove o pensionato")
 
 profilo = diagnosi.Profilo(
@@ -260,6 +263,7 @@ profilo = diagnosi.Profilo(
     gia_assicurato_altrove=gia_assicurato,
     prima_iscrizione_2025=prima_iscrizione_2025,
     riduzione_richiesta=riduzione,
+    soggetto_isa=soggetto_isa,
     natura_attivita=natura,
     altre_attivita=tuple(altre_attivita),
 )
@@ -269,23 +273,27 @@ try:
 except ValueError as errore:
     if spettacolo is not True:
         raise
-    st.title("Fisco Digitale")
+    st.title("Fisco Chiaro Consulting")
     st.warning(str(errore))
     st.info("Serve una valutazione della prestazione e del contratto prima di stimare contributi e netto.")
+    st.link_button("Richiedi una consulenza a Fisco Chiaro", prova_fcc.URL_CONSULENZA)
     st.stop()
 
 # ---------------------------------------------------------------------------
 # TESTATA
 # ---------------------------------------------------------------------------
 
-st.title("🧭 Fisco Digitale")
+st.title("Fisco Chiaro Consulting")
 st.caption(
     f"Fiscalita' e contabilita' dei lavori digitali · anno d'imposta {P.ANNO_IMPOSTA} · "
     f"{len(professioni.CATALOGO)} professioni mappate"
 )
 
-tab_diagnosi, tab_numeri, tab_iva, tab_conti, tab_scadenze, tab_catalogo = st.tabs(
+st.caption("Simulatore forfettario · Versione di prova per la revisione dello Studio")
+
+tab_cliente, tab_diagnosi, tab_numeri, tab_iva, tab_conti, tab_scadenze, tab_catalogo = st.tabs(
     [
+        "Il tuo risultato",
         "🩺 Diagnosi",
         "🧮 Numeri e confronto",
         "🌍 IVA e piattaforme",
@@ -298,6 +306,33 @@ tab_diagnosi, tab_numeri, tab_iva, tab_conti, tab_scadenze, tab_catalogo = st.ta
 # ---------------------------------------------------------------------------
 # TAB 1 - DIAGNOSI
 # ---------------------------------------------------------------------------
+
+with tab_cliente:
+    st.subheader("Una prima fotografia della tua attivita")
+    st.write("Compila il profilo a sinistra. Qui trovi la stima e i punti da approfondire con lo Studio.")
+    if esame.stima_utilizzabile:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Ricavi previsti", euro(profilo.ricavi_totali))
+        c2.metric("Imposte e contributi stimati", euro(esame.esito_forfettario.totale_dovuto))
+        c3.metric("Disponibile dopo costi e oneri", euro(esame.netto_reale))
+        st.caption("Stima annua a regime: la cassa dei singoli anni puo essere diversa. "
+                   "Il netto considera i costi dichiarati e i servizi esteri imponibili al 22% indicati.")
+    else:
+        st.warning("Prima di stimare il netto occorre completare l'inquadramento e i requisiti.")
+    punti = [v for v in esame.verifiche if v.esito != diagnosi.OK]
+    if punti:
+        st.markdown("**Da chiarire con lo Studio**")
+        for v in punti:
+            st.write(f"• {v.nome}: {v.messaggio}")
+    else:
+        st.write("Le verifiche automatiche sono complete sui dati dichiarati. Lo Studio potra confermare l'inquadramento.")
+    st.markdown("**Il prossimo passo**")
+    st.write("Scarica il riepilogo e riportalo nel modulo di richiesta dello Studio. "
+             "Il pulsante apre il sito ufficiale, dove puoi scegliere come essere ricontattato.")
+    st.download_button("Scarica il riepilogo per lo Studio", prova_fcc.riepilogo(profilo, esame),
+                       file_name="riepilogo-fisco-chiaro.txt", mime="text/plain")
+    st.link_button("Richiedi una consulenza a Fisco Chiaro", prova_fcc.URL_CONSULENZA, type="primary")
+    st.caption("Il riepilogo non viene inviato automaticamente. Completi tu la richiesta sul sito dello Studio.")
 
 with tab_diagnosi:
     if not esame.ammesso_al_forfettario:
@@ -553,6 +588,9 @@ with tab_numeri:
             "arrivano insieme saldo e acconti. E' il motivo per cui tanti freelance si "
             "trovano scoperti a giugno."
         )
+        if not esame.piano_cassa:
+            st.info("Piano sospeso per il beneficio INPS del 2025: occorrono data di avvio, storico "
+                    "dei versamenti e scadenza dei 36 mesi. Il modello di nuova apertura non e applicabile.")
         piano = pd.DataFrame(
             [
                 {
@@ -662,6 +700,19 @@ with tab_iva:
         format_func=lambda x: {"IT": "Italia", "UE": "Unione Europea", "EXTRA_UE": "Extra-UE"}[x],
     )
 
+    importo_operazione = st.number_input("Importo della singola operazione (€)", min_value=0.0, value=0.0)
+    with st.expander("Cumuli IVA e opzioni"):
+        st.caption("I cumuli dell'anno corrente escludono la singola operazione. OSS: somma beni a distanza e servizi elettronici; esclusi servizi generici.")
+        cumulo_vendite = st.number_input("Vendite UE rilevanti gia effettuate nell'anno (€)", min_value=0.0, value=float(vendite_privati_ue))
+        vendite_precedenti = st.number_input("Vendite UE rilevanti nell'anno precedente (€)", min_value=0.0)
+        acquisti_correnti = st.number_input("Acquisti di beni UE gia effettuati nell'anno (€)", min_value=0.0)
+        acquisti_precedenti = st.number_input("Acquisti di beni UE nell'anno precedente (€)", min_value=0.0)
+        opzione_destinazione = st.checkbox("Opzione per IVA nel Paese del cliente")
+        opzione_acquisti = st.checkbox("Opzione per acquisti intracomunitari imponibili")
+        beni_speciali = st.checkbox("Beni soggetti ad accisa o mezzi di trasporto nuovi")
+        solo_italia = st.checkbox("Attivita stabilita solo in Italia", value=True)
+        servizio_generico = st.checkbox("Acquisto di servizio generico imponibile in Italia confermato", value=False)
+
     risultato = iva_estero.analizza(
         iva_estero.Operazione(
             direzione=direzione,
@@ -669,11 +720,19 @@ with tab_iva:
             controparte=controparte,
             area=area,
             regime=iva_estero.FORFETTARIO,
-            vendite_ue_b2c_anno=float(vendite_privati_ue),
-            acquisti_beni_ue_anno=0.0,
+            importo=importo_operazione,
+            vendite_ue_b2c_anno=cumulo_vendite,
+            acquisti_beni_ue_anno=acquisti_correnti,
+            vendite_ue_b2c_anno_precedente=vendite_precedenti,
+            acquisti_beni_ue_anno_precedente=acquisti_precedenti,
+            opzione_iva_destinazione=opzione_destinazione,
+            opzione_acquisti_intracomunitari=opzione_acquisti,
+            beni_speciali=beni_speciali,
+            stabilito_solo_italia=solo_italia,
+            servizio_generico_confermato=servizio_generico,
         )
     )
-    st.success(f"**{risultato.titolo}** — {risultato.iva}")
+    (st.warning if risultato.da_verificare else st.success)(f"**{risultato.titolo}** — {risultato.iva}")
     c1, c2 = st.columns(2)
     c1.write(f"**Documento:** {risultato.documento}")
     c1.caption(risultato.riferimento)
@@ -714,7 +773,7 @@ with tab_iva:
 
     if acquisti_esteri:
         st.error(
-            f"Sui tuoi {euro(acquisti_esteri)} di acquisti esteri annui maturi "
+            f"Sui {euro(acquisti_esteri)} di servizi esteri imponibili al 22% dichiarati stimi "
             f"{euro(iva_estero.iva_reverse_charge(float(acquisti_esteri)))} di IVA da "
             "versare con F24, che in forfettario non recuperi."
         )
@@ -748,6 +807,9 @@ with tab_conti:
         )
         m_cliente = c6.selectbox("Tipo controparte", (iva_estero.B2B, iva_estero.B2C),
                                  format_func=lambda x: "Azienda" if x == iva_estero.B2B else "Privato")
+        m_oggetto = st.selectbox("Oggetto del movimento", (iva_estero.SERVIZIO, iva_estero.SERVIZIO_ELETTRONICO, iva_estero.BENE))
+        m_aliquota = st.selectbox("Aliquota IVA verificata sul documento", (0.22, 0.10, 0.05, 0.04, 0.0),
+            format_func=lambda v: f"{v:.0%}" if v else "0 - esente / non soggetta, se confermato")
         if st.form_submit_button("Aggiungi movimento", width="stretch"):
             if m_data.year != P.ANNO_IMPOSTA:
                 st.error(f"Il registro copre l'anno {P.ANNO_IMPOSTA}.")
@@ -760,10 +822,17 @@ with tab_conti:
                         tipo=m_tipo,
                         area=m_area,
                         controparte=m_cliente,
+                        oggetto=m_oggetto,
+                        aliquota_iva=m_aliquota,
                     )
                 )
 
-    registro = contabilita.Registro(P.ANNO_IMPOSTA, list(st.session_state.movimenti))
+    st.caption("Registro di cassa indicativo. L'IVA dipende da fattura, data di ricezione e trattamento "
+               "verificato: questo registro non determina la scadenza F24. Esclusi beni soggetti ad accisa e mezzi nuovi.")
+    registro_precedenti = st.number_input("Registro: acquisti beni UE anno precedente (€)", min_value=0.0)
+    registro_opzione = st.checkbox("Registro: opzione acquisti intracomunitari")
+    registro = contabilita.Registro(P.ANNO_IMPOSTA, list(st.session_state.movimenti),
+        acquisti_beni_ue_precedenti=registro_precedenti, opzione_intracomunitari=registro_opzione)
 
     if registro.movimenti:
         c1, c2, c3, c4 = st.columns(4)
@@ -846,7 +915,11 @@ with tab_scadenze:
         st.info("Completa la verifica della posizione prima di usare uno scadenzario personalizzato.")
     else:
         st.markdown("### Le tue scadenze")
-        st.caption("Filtrate in base al regime, alla cassa previdenziale e alle operazioni estere.")
+        st.caption("Calendario indicativo: confermare periodicita INTRASTAT, requisiti ISA e proroghe. Le annualita successive al 2026 usano i termini ordinari.")
+        periodicita_intrastat = st.selectbox("Periodicita INTRASTAT confermata", (None, "mensile", "trimestrale"),
+            format_func=lambda x: x.capitalize() if x else "Da verificare")
+        if clienti_esteri and periodicita_intrastat is None:
+            st.warning("Le date INTRASTAT sono sospese finche non e confermata la periodicita.")
 
         profilo_scadenze = scadenze.Profilo(
             regime="forfettario",
@@ -855,6 +928,8 @@ with tab_scadenze:
             vendite_ue_b2b=clienti_esteri,
             riduzione_contributiva_da_chiedere=esame.gestione in previdenza.GESTIONI_IMPRESA,
             oss=vendite_privati_ue > P.SOGLIA_OSS,
+            soggetto_isa=soggetto_isa,
+            periodicita_intrastat=periodicita_intrastat,
         )
 
         st.markdown("#### Prossime")
