@@ -122,7 +122,9 @@ def artigiani_commercianti(
     maternita = P.CONTRIBUTO_MATERNITA * ragguaglio
     minimale = P.MINIMALE_ARTIGIANI_COMMERCIANTI * ragguaglio
     scaglione = P.SCAGLIONE_ARTIGIANI_COMMERCIANTI * ragguaglio
-    massimale = P.MASSIMALE_ARTIGIANI_COMMERCIANTI * ragguaglio
+    # Soggetti privi di anzianita' al 31/12/1995: il massimale annuo
+    # non e' frazionabile per mese (circolare INPS 14/2026, paragrafo 4).
+    massimale = P.MASSIMALE_ARTIGIANI_COMMERCIANTI
 
     imponibile_utile = min(imponibile, massimale)
     eccedenza_primo = max(0.0, min(imponibile_utile, scaglione) - minimale)
@@ -220,3 +222,4 @@ def riduzioni_disponibili(gestione: str, prima_iscrizione_2025: bool = False) ->
     if prima_iscrizione_2025 or P.RIDUZIONE_50_APERTA_A_NUOVE_ISCRIZIONI:
         return (0, 35, 50)
     return (0, 35)
+

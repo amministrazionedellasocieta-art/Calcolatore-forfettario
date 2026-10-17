@@ -6,6 +6,7 @@ operazioni estere: un calendario generico e' rumore, questo e' filtrato.
 
 from __future__ import annotations
 
+from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -59,9 +60,10 @@ def calendario(anno: int = P.ANNO_IMPOSTA, profilo: Profilo | None = None) -> tu
     scadenze: list[Scadenza] = []
 
     def aggiungi(giorno: date, titolo: str, descrizione: str, categoria: str,
-                 ricorrente: bool = False) -> None:
+                 ricorrente: bool = False, *, sposta_weekend: bool = True) -> None:
         scadenze.append(
-            Scadenza(_giorno_lavorativo(giorno), titolo, descrizione, categoria, ricorrente)
+            Scadenza(_giorno_lavorativo(giorno) if sposta_weekend else giorno,
+                     titolo, descrizione, categoria, ricorrente)
         )
 
     # --- Imposte -----------------------------------------------------------
@@ -162,10 +164,13 @@ def calendario(anno: int = P.ANNO_IMPOSTA, profilo: Profilo | None = None) -> tu
         for mese, trimestre in ((4, "primo"), (7, "secondo"), (10, "terzo"), (1, "quarto")):
             anno_effettivo = anno + 1 if mese == 1 else anno
             aggiungi(
-                date(anno_effettivo, mese, 30 if mese != 1 else 31),
+                date(anno_effettivo, mese, monthrange(anno_effettivo, mese)[1]),
                 f"Dichiarazione OSS - {trimestre} trimestre",
-                "Dichiarazione e versamento dell'IVA dovuta negli altri Stati UE.",
+                "Dichiarazione e versamento dell'IVA dovuta negli altri Stati UE. "
+                "Termine all'ultimo giorno del mese successivo al trimestre, "
+                "senza rinvio per sabato, domenica o festivita'.",
                 IVA,
+                sposta_weekend=False,
             )
     if p.regime != "forfettario":
         aggiungi(
@@ -228,3 +233,4 @@ def prossime(
             viste.add(chiave)
             future.append(s)
     return tuple(future[:quante])
+

@@ -32,3 +32,12 @@ I nuovi casi di regressione hanno riprodotto i difetti prima della correzione.
 ## Successiva revisione del catalogo
 
 Completato il confronto delle 44 schede con struttura, note e raccordo ISTAT aggiornato 2026; criteri e ambiti supportati sono in [VERIFICA_CATALOGO.md](VERIFICA_CATALOGO.md). Questa fase aggiunge sospensione dei numeri per dati incompleti, casi FPLS e previdenza mista. Non equivale a validazione integrale di tutti i moduli fiscali.
+
+
+## Correzione di scadenze OSS e massimale INPS
+
+- L'OSS scade il 30 aprile, 31 luglio, 31 ottobre e 31 gennaio successivo. Questi termini non vengono rinviati al lunedi' se cadono nel fine settimana. Nel 2026 il terzo trimestre resta al 31 ottobre (sabato); il quarto al 31 gennaio 2027 (domenica).
+- Il massimale annuale artigiani/commercianti di 122.295 euro, adottato dal motore per i soggetti privi di anzianita' contributiva al 31 dicembre 1995, non viene piu' moltiplicato per i mesi/12. Rimane il ragguaglio del minimale e del contributo fisso. La modifica non introduce il diverso massimale per i soggetti con anzianita' pregressa.
+- Sette nuovi test verificano date, mancato rinvio OSS, calendario delle prossime scadenze, conservazione dello slittamento ordinario dei weekend, massimale per periodi di uno/tre/sei/dodici mesi e quota fissa.
+
+Fonti: [Commissione europea, dichiarazione e pagamento OSS](https://vat-one-stop-shop.ec.europa.eu/one-stop-shop/declare-and-pay-oss_en), [INPS 14/2026, paragrafo 4](https://www.inps.it/content/dam/inps-site/it/scorporati/circolari-e-messaggi/2026/02/Circolare_15162/Allegati/16561_Circolare-numero-14-del-09-02-2026.pdf).
