@@ -39,8 +39,8 @@ CAMPI = [
     "data_ricerca",
 ]
 
-SYSTEM = """Sei un ricercatore di mercato per Fisco Chiaro Consulting (https://fiscochiaro.it), \
-studio che assiste in Italia partite IVA in regime forfettario.
+SYSTEM = """Sei un ricercatore di mercato per Fisco Chiaro Consulting (https://www.fiscochiaroconsulting.it), \
+servizio di consulenza fiscale e contabile personalizzata per professionisti, freelance, ditte individuali e imprese in Italia, inclusi contribuenti forfettari e attivita digitali. Offre assistenza continuativa, adempimenti, valutazioni sul regime fiscale e supporto alla crescita dell'attivita.
 
 Obiettivo: trovare sul web pagine PUBBLICHE e PROFESSIONALI di giovani (indicativamente under 35) \
 che lavorano nel digitale in Italia - freelance, creator, social media manager, web designer, \
